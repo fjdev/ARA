@@ -9,33 +9,103 @@
 
 ## 📊 Medium Priority
 
-- [ ] **Enhanced filtering options**
-  - `--role-filter`: Filter by role name (e.g., "Owner", "Contributor")
+GitHub Issues created for these items - see https://github.com/fjdev/ARA/issues
+
+## ✅ Recently Completed
+
+### November 29, 2025
+
+- ✅ **Load testing and performance optimization** - Issue #11 closed
+  - Comprehensive performance test suite (9 tests)
+  - Benchmarks for small to enterprise-scale datasets (10 to 50,000 assignments)
+  - Memory profiling with `tracemalloc`
+  - Performance validation: 50,000 assignments in 0.42s using 24.67 MB
+  - Linear memory scaling confirmed (~0.49 KB per assignment)
+  - Filter performance: 10,000 assignments in 77ms
+  - Cache performance validated
+  - Rate limiting configuration tests
+  - Detailed performance report (PERFORMANCE.md)
+  - **Result:** Exceeds all targets by 20-227x margins
+
+- ✅ **Progress bar for long-running scans** - Issue #6 closed
+  - Implemented ProgressTracker class with optional tqdm support
+  - Simple text fallback (no dependencies required)
+  - Shows percentage, ETA, rate, and scope count
+  - Auto-disables in debug mode
+  - `--no-progress` flag for manual control
+  - Enhanced mode with tqdm: `Scanning scopes: 100%|██████████| 156/156 [01:47<00:00, 1.45scope/s]`
+  - Simple mode (built-in): `Scanning scopes: [████████████████████] 156/156 (100%) | ETA: 0s | 1.4 scopes/s`
+
+- ✅ **Enhanced filtering options** - Issue #4 closed
+  - `--role-filter`: Filter by role name (comma-separated, case-insensitive)
   - `--principal-type-filter`: Filter by principal type (User, Group, ServicePrincipal)
-  - `--principal-name-filter`: Filter by principal name pattern (regex)
+  - `--principal-name-filter`: Filter by principal name with regex support
   - `--exclude-system`: Exclude system-assigned managed identities
+  - All filters combinable for powerful queries
+  - Shows both total and filtered counts in logs
+  - Filter metadata tracked in JSON/Excel outputs
+  - Examples:
+    - `./ara --scope my-mg --role-filter "Owner,Contributor"`
+    - `./ara --scope my-mg --principal-type-filter "ServicePrincipal"`
+    - `./ara --scope my-mg --principal-name-filter "^sp-.*"`
 
-- [ ] **Pagination for large datasets**
-  - Some environments may have thousands of assignments
-  - Add `--page-size` and `--page` options for paginated output
-  - Useful for very large scans
+- ✅ **Excel (.xlsx) output format** - Issue #1 closed
+  - Multi-sheet workbook with professional formatting
+  - Sheets: Role Assignments (with filters), Summary (statistics), Metadata
+  - Optional dependency (openpyxl) with graceful error handling
+  - Fully documented in README
 
-- [ ] **Progress bar for long-running scans**
-  - Use `tqdm` library (would add dependency)
-  - Or implement simple percentage-based progress in console
-  - Show: `Scanning resources... [34/156] 21% (ETA: 2m 15s)`
+- ✅ **Subscription-scoped scanning** - Issue #3 closed
+  - GUID auto-detection (xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx)
+  - Multiple format support (GUID, short, full path)
+  - Smart depth validation and auto-adjustment
+  - Subscription name resolution (shows display name instead of GUID)
+  - Comprehensive documentation and examples
 
-- [ ] **Caching improvements**
-  - Save API responses to disk for offline analysis
-  - `--use-cache` and `--cache-dir` options
-  - Useful for development and repeated analysis
+- ✅ **Architectural patterns compliance**
+  - ARA follows all VCC Toolkit architectural patterns (100% compliant)
+  - Added Filter and ProgressTracker patterns to ARCHITECTURAL_PATTERNS.md
+  - 30 classes, 2,117 lines, 44 tests - all within recommended ranges
+  - Zero violations, excellent reference implementation
 
-- [ ] **Comparison mode**
-  - Compare two scan results (historical vs current)
-  - Show added/removed assignments
-  - `ara --compare results/old.json results/new.json`
+- ✅ **Removed 'both' output format**
+  - Simplified to just 'json', 'csv', or 'xlsx'
+  - Cleaner UX - users run twice if both formats needed
 
-## 🔧 Low Priority / Nice-to-Have
+- ✅ **README corrections**
+  - Fixed default depth documentation (management-groups, not subscriptions)
+  - Updated all examples to use simple scope format
+  - Added Scope Formats section with all 3 formats
+  - Updated performance benchmarks
+
+### Earlier Releases
+- ✅ Multi-level scanning (management-groups, subscriptions, resource-groups, resources)
+- ✅ Flexible scope format (simple: `my-mg`, full: `/providers/...`)
+- ✅ Resource type filtering
+- ✅ Rate limiting with exponential backoff
+- ✅ Display name resolution via Graph API
+- ✅ "Unknown" fallback for deleted principals
+- ✅ CSV with separate Scope and Scope Type columns
+- ✅ JSON with resource_type field
+- ✅ Comprehensive test suite (53 tests: 44 unit + 9 performance, 100% pass rate)
+- ✅ Performance safeguards (max-resources, api-delay)
+- ✅ Default depth changed to management-groups
+- ✅ Enhanced error handling and logging
+- ✅ Optional dependencies with graceful fallbacks (openpyxl, tqdm)
+
+## 🎯 Outstanding GitHub Issues
+
+See https://github.com/fjdev/ARA/issues for remaining open issues:
+- **Issue #2**: GitHub Actions CI/CD (deferred)
+- **Issue #5**: Pagination for large datasets
+- **Issue #7**: Caching improvements  
+- **Issue #8**: Comparison mode
+- **Issue #9**: Increase test coverage to 90%+
+- **Issue #10**: Mock Azure API for integration tests
+
+## 🔧 Additional Ideas (Not Yet Issues)
+
+### Low Priority / Nice-to-Have
 
 - [ ] **HTML report output**
   - Interactive HTML dashboard
@@ -67,24 +137,19 @@
   - HTTP endpoints for triggering scans
   - Webhook support for notifications
 
-## 🧪 Testing & Quality
+### Testing & Quality
 
-- [ ] **Increase test coverage to 90%+**
-  - Currently: 44 tests covering core functionality
+- [ ] **Increase test coverage to 90%+** - Issue #9 open
+  - Currently: 53 tests (44 unit + 9 performance) covering core functionality
   - Add integration tests with mock Azure API
-  - Add performance benchmarking tests
+  - Add edge case coverage
 
-- [ ] **Mock Azure API for integration tests**
+- [ ] **Mock Azure API for integration tests** - Issue #10 open
   - Test full scan workflow without Azure credentials
   - Useful for CI/CD pipelines
   - Validate output formats thoroughly
 
-- [ ] **Load testing**
-  - Test with environments of 10k+ resources
-  - Measure memory usage and optimize
-  - Validate rate limiting effectiveness
-
-## 📚 Documentation
+### Documentation
 
 - [ ] **Video tutorial / demo**
   - Screen recording showing basic usage
@@ -103,7 +168,7 @@
   - Follow semantic versioning
   - Document breaking changes
 
-## 🔐 Security & Compliance
+### Security & Compliance
 
 - [ ] **Security audit**
   - Review token handling
@@ -120,7 +185,7 @@
   - `--mask-sensitive` flag
   - Useful for sharing reports externally
 
-## 🚀 Performance Optimizations
+### Performance Optimizations
 
 - [ ] **Parallel API calls**
   - Use async/await for concurrent requests
@@ -137,14 +202,14 @@
   - Requires storing state between runs
   - Massive performance improvement for regular audits
 
-## 🌍 Internationalization
+### Internationalization
 
 - [ ] **Multi-language support**
   - Currently English only
   - Add i18n for console output
   - Support for localized date/time formats
 
-## 🎨 User Experience
+### User Experience
 
 - [ ] **Interactive mode**
   - TUI (Text User Interface) using `rich` or `curses`
@@ -160,46 +225,6 @@
   - Currently: normal and --debug
   - Add: --quiet, --verbose, --very-verbose
   - Fine-grained control over output
-
-## ✅ Recently Completed
-
-### November 29, 2025
-- ✅ **Excel (.xlsx) output format**
-  - Multi-sheet workbook with professional formatting
-  - Sheets: Role Assignments (with filters), Summary (statistics), Metadata
-  - Optional dependency (openpyxl) with graceful error handling
-  - Fully documented in README
-
-- ✅ **Subscription-scoped scanning**
-  - GUID auto-detection (xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx)
-  - Multiple format support (GUID, short, full path)
-  - Smart depth validation and auto-adjustment
-  - Subscription name resolution (shows display name instead of GUID)
-  - Comprehensive documentation and examples
-
-- ✅ **Removed 'both' output format**
-  - Simplified to just 'json', 'csv', or 'xlsx'
-  - Cleaner UX - users run twice if both formats needed
-
-- ✅ **README corrections**
-  - Fixed default depth documentation (management-groups, not subscriptions)
-  - Updated all examples to use simple scope format
-  - Added Scope Formats section with all 3 formats
-  - Updated performance benchmarks
-
-### Earlier Releases
-- ✅ Multi-level scanning (management-groups, subscriptions, resource-groups, resources)
-- ✅ Flexible scope format (simple: `my-mg`, full: `/providers/...`)
-- ✅ Resource type filtering
-- ✅ Rate limiting with exponential backoff
-- ✅ Display name resolution via Graph API
-- ✅ "Unknown" fallback for deleted principals
-- ✅ CSV with separate Scope and Scope Type columns
-- ✅ JSON with resource_type field
-- ✅ Comprehensive test suite (44 tests)
-- ✅ Performance safeguards (max-resources, api-delay)
-- ✅ Default depth changed to management-groups
-- ✅ Enhanced error handling and logging
 
 ---
 

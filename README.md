@@ -23,7 +23,7 @@ A professional tool for exporting Azure role assignments at management group and
 - **Robust Error Handling**: Graceful handling of API errors and permissions
 - **Production Ready**: Proper logging, validation, and OOP design
 - **Minimal Dependencies**: Core uses Python standard library (Excel/progress bar use optional dependencies)
-- **Fully Tested**: Comprehensive test suite with 53+ unit and performance tests
+- **Fully Tested**: Comprehensive test suite with 53 tests (44 unit + 9 performance)
 
 ## 🚀 Quick Start
 
@@ -525,31 +525,40 @@ az account get-access-token --resource https://management.azure.com
 
 ## ⚡ Performance
 
-ARA is highly optimized for enterprise-scale workloads:
+ARA is designed for **enterprise-scale performance**:
 
-- **50,000 assignments** processed in < 0.5 seconds
-- **24.67 MB memory** for 50k assignments (0.5 KB per item)
-- **Linear scaling** - predictable resource usage
-- **Efficient filtering** - 10k assignments filtered in 77ms
+- **Memory Efficient:** ~0.49 KB per role assignment (linear scaling)
+- **Fast Processing:** 50,000 assignments in 0.42 seconds
+- **Scalable:** Handles environments from 10 to 100,000+ assignments
+- **Optimized Caching:** LRU cache for repeated API calls
+- **Smart Rate Limiting:** Configurable delays and automatic retry with exponential backoff
 
-### Real-World Performance
+### Performance Benchmarks
 
-| Environment Size | Scopes | Assignments | Processing Time | Memory Usage |
-|------------------|--------|-------------|-----------------|--------------|
-| Small Dev | 10 | 50 | < 1ms | 0.02 MB |
-| Small Production | 100 | 500 | 4ms | 0.24 MB |
-| Medium Enterprise | 1,000 | 5,000 | 45ms | 2.44 MB |
-| Large Enterprise | 10,000 | 50,000 | 425ms | 24.67 MB |
+| Dataset Size | Scopes | Assignments | Time | Memory |
+|--------------|--------|-------------|------|--------|
+| Small | 10 | 50 | <0.001s | 0.02 MB |
+| Medium | 100 | 500 | 0.004s | 0.24 MB |
+| Large | 1,000 | 5,000 | 0.044s | 2.44 MB |
+| Enterprise | 10,000 | 50,000 | 0.420s | 24.67 MB |
 
-**Note**: Total scan time includes API latency and rate limiting. Processing time above measures data handling only.
+See [PERFORMANCE.md](PERFORMANCE.md) for detailed benchmarks and analysis.
 
-For detailed benchmarks, see [PERFORMANCE.md](PERFORMANCE.md).
+### Approximate Scan Times
 
-### Tips for Large Environments
+Real-world scan times (includes API latency and network):
 
+| Depth Level | Scopes Scanned | Typical Time | Use Case |
+|-------------|----------------|--------------|----------|
+| `management-groups` | 1-50 MGs | < 1 minute | Organizational structure audit |
+| `subscriptions` | 1-100 subs | 1-3 minutes | Standard RBAC audit |
+| `resource-groups` | 100-500 RGs | 3-10 minutes | Detailed subscription audit |
+| `resources` | 1000-10000 resources | 10-60 minutes | Complete environment scan |
+
+**Tips for Large Environments**:
 - Start with `--depth subscriptions` to get baseline
 - Use `--resource-types` to focus on critical resources
-- Adjust `--api-delay` to balance speed vs throttling
+- Run resource scans during off-hours
 - Consider scanning individual subscriptions separately
 - Use `--max-resources` as a safety limit
 
