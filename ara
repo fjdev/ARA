@@ -1099,6 +1099,255 @@ class CSVOutputHandler(OutputHandler):
             raise ExportError(f"Failed to write CSV file: {e}")
 
 
+class ExcelOutputHandler(OutputHandler):
+    """Generate Excel (.xlsx) output with multiple sheets."""
+    
+    def __init__(self, results_dir: str = ARAConfig.RESULTS_DIR):
+        """Initialize Excel handler."""
+        self.results_dir = results_dir
+        os.makedirs(self.results_dir, exist_ok=True)
+        
+        # Check if openpyxl is available
+        try:
+            global openpyxl
+            import openpyxl
+            from openpyxl.styles import Font, PatternFill, Alignment
+            from openpyxl.utils import get_column_letter
+            self.openpyxl_available = True
+        except ImportError:
+            self.openpyxl_available = False
+            logger.warning("⚠️  openpyxl not installed. Excel output will not be available.")
+            logger.warning("   Install with: pip install openpyxl")
+    
+    def generate(self, results: ScanResult, filename: Optional[str] = None, **kwargs) -> str:
+        """Write results to Excel file with multiple sheets."""
+        if not self.openpyxl_available:
+            raise ExportError(
+                "Excel output requires openpyxl library.\n"
+                "Install it with: pip install openpyxl"
+            )
+        
+        from openpyxl import Workbook
+        from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+        from openpyxl.utils import get_column_letter
+        
+        if not filename:
+            # Extract management group ID from scope
+            parts = results.scope.split('/')
+            mg_id = parts[-1] if parts else "unknown"
+            filename = f"role_assignments_{mg_id}.xlsx"
+        
+        filepath = os.path.join(self.results_dir, filename)
+        
+        try:
+            wb = Workbook()
+            
+            # Remove default sheet
+            if 'Sheet' in wb.sheetnames:
+                wb.remove(wb['Sheet'])
+            
+            # Sheet 1: Role Assignments
+            self._create_assignments_sheet(wb, results)
+            
+            # Sheet 2: Summary Statistics
+            self._create_summary_sheet(wb, results)
+            
+            # Sheet 3: Metadata
+            self._create_metadata_sheet(wb, results)
+            
+            # Save workbook
+            wb.save(filepath)
+            logger.info(f"💾 Excel results saved to: {filepath}")
+            return filepath
+            
+        except Exception as e:
+            raise ExportError(f"Failed to write Excel file: {e}")
+    
+    def _create_assignments_sheet(self, wb, results: ScanResult):
+        """Create the main assignments sheet."""
+        from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+        from openpyxl.utils import get_column_letter
+        
+        ws = wb.create_sheet("Role Assignments", 0)
+        
+        # Check if any assignments have resource_type
+        has_resource_types = any(a.resource_type for a in results.assignments)
+        
+        # Headers
+        headers = ['Principal Name', 'Principal ID', 'Principal Type', 'Role', 
+                   'Scope Name', 'Scope Type']
+        if has_resource_types:
+            headers.append('Resource Type')
+        
+        # Style definitions
+        header_font = Font(bold=True, color="FFFFFF")
+        header_fill = PatternFill(start_color="366092", end_color="366092", fill_type="solid")
+        header_alignment = Alignment(horizontal="center", vertical="center")
+        border = Border(
+            left=Side(style='thin'),
+            right=Side(style='thin'),
+            top=Side(style='thin'),
+            bottom=Side(style='thin')
+        )
+        
+        # Write headers
+        for col_num, header in enumerate(headers, 1):
+            cell = ws.cell(row=1, column=col_num)
+            cell.value = header
+            cell.font = header_font
+            cell.fill = header_fill
+            cell.alignment = header_alignment
+            cell.border = border
+        
+        # Write data
+        for row_num, assignment in enumerate(sorted(results.assignments, key=lambda x: x.role_name), 2):
+            data = [
+                assignment.principal_name,
+                assignment.principal_id,
+                assignment.principal_type,
+                assignment.role_name,
+                assignment.scope_name,
+                assignment.scope_type
+            ]
+            if has_resource_types:
+                data.append(assignment.resource_type or '')
+            
+            for col_num, value in enumerate(data, 1):
+                cell = ws.cell(row=row_num, column=col_num)
+                cell.value = value
+                cell.border = border
+                cell.alignment = Alignment(vertical="center")
+        
+        # Auto-size columns
+        for col_num in range(1, len(headers) + 1):
+            col_letter = get_column_letter(col_num)
+            max_length = 0
+            for cell in ws[col_letter]:
+                try:
+                    if len(str(cell.value)) > max_length:
+                        max_length = len(str(cell.value))
+                except:
+                    pass
+            adjusted_width = min(max_length + 2, 50)
+            ws.column_dimensions[col_letter].width = adjusted_width
+        
+        # Freeze header row
+        ws.freeze_panes = "A2"
+        
+        # Add filters
+        ws.auto_filter.ref = ws.dimensions
+    
+    def _create_summary_sheet(self, wb, results: ScanResult):
+        """Create summary statistics sheet."""
+        from openpyxl.styles import Font, PatternFill, Alignment
+        
+        ws = wb.create_sheet("Summary", 1)
+        
+        # Title
+        ws['A1'] = "Role Assignment Summary"
+        ws['A1'].font = Font(size=16, bold=True)
+        ws.merge_cells('A1:B1')
+        
+        # Count assignments by role
+        role_counts = {}
+        for assignment in results.assignments:
+            role_counts[assignment.role_name] = role_counts.get(assignment.role_name, 0) + 1
+        
+        # Count assignments by principal type
+        type_counts = {}
+        for assignment in results.assignments:
+            type_counts[assignment.principal_type] = type_counts.get(assignment.principal_type, 0) + 1
+        
+        # Count assignments by scope type
+        scope_counts = {}
+        for assignment in results.assignments:
+            scope_counts[assignment.scope_type] = scope_counts.get(assignment.scope_type, 0) + 1
+        
+        row = 3
+        
+        # Overall stats
+        ws[f'A{row}'] = "Total Assignments:"
+        ws[f'B{row}'] = results.total_assignments_found
+        ws[f'A{row}'].font = Font(bold=True)
+        row += 1
+        
+        ws[f'A{row}'] = "Total Scopes Scanned:"
+        ws[f'B{row}'] = results.total_scopes_scanned
+        ws[f'A{row}'].font = Font(bold=True)
+        row += 2
+        
+        # By Role
+        ws[f'A{row}'] = "Assignments by Role"
+        ws[f'A{row}'].font = Font(bold=True, size=12)
+        ws.merge_cells(f'A{row}:B{row}')
+        row += 1
+        
+        for role, count in sorted(role_counts.items(), key=lambda x: x[1], reverse=True):
+            ws[f'A{row}'] = role
+            ws[f'B{row}'] = count
+            row += 1
+        row += 1
+        
+        # By Principal Type
+        ws[f'A{row}'] = "Assignments by Principal Type"
+        ws[f'A{row}'].font = Font(bold=True, size=12)
+        ws.merge_cells(f'A{row}:B{row}')
+        row += 1
+        
+        for ptype, count in sorted(type_counts.items(), key=lambda x: x[1], reverse=True):
+            ws[f'A{row}'] = ptype
+            ws[f'B{row}'] = count
+            row += 1
+        row += 1
+        
+        # By Scope Type
+        ws[f'A{row}'] = "Assignments by Scope Type"
+        ws[f'A{row}'].font = Font(bold=True, size=12)
+        ws.merge_cells(f'A{row}:B{row}')
+        row += 1
+        
+        for stype, count in sorted(scope_counts.items(), key=lambda x: x[1], reverse=True):
+            ws[f'A{row}'] = stype
+            ws[f'B{row}'] = count
+            row += 1
+        
+        # Column widths
+        ws.column_dimensions['A'].width = 35
+        ws.column_dimensions['B'].width = 15
+    
+    def _create_metadata_sheet(self, wb, results: ScanResult):
+        """Create metadata sheet."""
+        from openpyxl.styles import Font
+        
+        ws = wb.create_sheet("Metadata", 2)
+        
+        # Title
+        ws['A1'] = "Scan Metadata"
+        ws['A1'].font = Font(size=16, bold=True)
+        ws.merge_cells('A1:B1')
+        
+        # Metadata
+        metadata = [
+            ("Tool", "Azure Role Assignment Exporter (ARA)"),
+            ("Version", __version__),
+            ("Scan Timestamp", results.scan_timestamp),
+            ("Scope", results.scope),
+            ("Total Scopes Scanned", results.total_scopes_scanned),
+            ("Total Assignments Found", results.total_assignments_found),
+        ]
+        
+        row = 3
+        for key, value in metadata:
+            ws[f'A{row}'] = key
+            ws[f'B{row}'] = value
+            ws[f'A{row}'].font = Font(bold=True)
+            row += 1
+        
+        # Column widths
+        ws.column_dimensions['A'].width = 25
+        ws.column_dimensions['B'].width = 50
+
+
 # Main Application
 class ARAApplication:
     """Main ARA application class."""
@@ -1110,6 +1359,7 @@ class ARAApplication:
             'summary': SummaryOutputHandler(),
             'json': JSONOutputHandler(results_dir),
             'csv': CSVOutputHandler(results_dir),
+            'xlsx': ExcelOutputHandler(results_dir),
         }
     
     def run(self, args: argparse.Namespace) -> int:
@@ -1237,6 +1487,8 @@ class ARAApplication:
                 self.output_handlers['json'].generate(results)
             elif args.format == 'csv':
                 self.output_handlers['csv'].generate(results)
+            elif args.format == 'xlsx':
+                self.output_handlers['xlsx'].generate(results)
             
             # Always show summary
             self.output_handlers['summary'].generate(results)
@@ -1356,9 +1608,9 @@ Examples:
     
     parser.add_argument(
         '--format',
-        choices=['json', 'csv'],
+        choices=['json', 'csv', 'xlsx'],
         default='json',
-        help='Output format (default: json)'
+        help='Output format: json, csv, or xlsx (Excel). Note: xlsx requires openpyxl (pip install openpyxl)'
     )
     
     parser.add_argument(

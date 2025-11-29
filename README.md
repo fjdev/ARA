@@ -16,11 +16,11 @@ A professional tool for exporting Azure role assignments at management group and
 - **Principal Name Resolution**: Automatic lookup via Microsoft Graph API with "Unknown" fallback
 - **Resource Type Filtering**: Focus on specific resource types (VMs, Storage, etc.)
 - **Performance Safeguards**: Rate limiting, max resource limits, and API retry logic
-- **Multiple Output Formats**: JSON, CSV with structured data including scope types
+- **Multiple Output Formats**: JSON, CSV, and Excel (.xlsx) with structured data and formatting
 - **Comprehensive Reporting**: Detailed console summaries with statistics
 - **Robust Error Handling**: Graceful handling of API errors and permissions
 - **Production Ready**: Proper logging, validation, and OOP design
-- **Minimal Dependencies**: Uses Python standard library (only requires Azure access token)
+- **Minimal Dependencies**: Core uses Python standard library (Excel output requires openpyxl)
 - **Fully Tested**: Comprehensive test suite with 44+ unit tests
 
 ## 🚀 Quick Start
@@ -45,6 +45,9 @@ chmod +x ara
 
 # Export to CSV format
 ./ara --scope my-mg --format csv
+
+# Export to Excel format (requires: pip install openpyxl)
+./ara --scope my-mg --format xlsx
 
 # Scan including subscriptions
 ./ara --scope my-mg --depth subscriptions
@@ -74,6 +77,7 @@ chmod +x ara
   - Read management groups (`Microsoft.Management/managementGroups/read`)
   - Read Microsoft Graph API (for principal name resolution)
 - **Network Access** to Azure Management API and Microsoft Graph API
+- **Optional**: `openpyxl` for Excel output (`pip install openpyxl`)
 
 ## 🔐 Authentication
 
@@ -191,6 +195,34 @@ Unknown,a1b2c3d4-...,ServicePrincipal,Reader,storage-prod,Resource,Microsoft.Sto
 
 **Note**: "Unknown" appears for deleted/orphaned principals that couldn't be resolved via Graph API.
 
+### Excel Output Format
+
+Excel output generates a multi-sheet workbook with professional formatting:
+
+**Sheet 1: Role Assignments**
+- Formatted table with headers, borders, and auto-sized columns
+- Frozen header row for easy scrolling
+- Auto-filters enabled on all columns
+- Same data as CSV with better presentation
+
+**Sheet 2: Summary**
+- Total assignment and scope counts
+- Assignments grouped by Role
+- Assignments grouped by Principal Type
+- Assignments grouped by Scope Type
+
+**Sheet 3: Metadata**
+- Tool name and version
+- Scan timestamp
+- Scope scanned
+- Total statistics
+
+**Requirements**: Install openpyxl first:
+```bash
+pip install openpyxl
+./ara --scope my-mg --format xlsx
+```
+
 ### Console Summary
 ```
 ================================================================================
@@ -301,6 +333,9 @@ Protect against runaway scans:
 
 # CSV output
 ./ara --scope my-mg --format csv
+
+# Excel output (requires openpyxl)
+./ara --scope my-mg --format xlsx
 ```
 
 ### Debug Mode
