@@ -2,23 +2,10 @@
 
 ## 🎯 High Priority
 
-- [x] **Add Excel (.xlsx) output format** ✅ *Completed 2025-11-29*
-  - Added openpyxl optional dependency
-  - Multi-sheet workbook with formatted tables
-  - Sheets: Role Assignments, Summary, Metadata
-  - Professional formatting with auto-filters and styling
-
-- [x] **GitHub Actions CI/CD** ⏸️ *Deferred - Issue #2 open*
+- [ ] **GitHub Actions CI/CD** - Issue #2 open
   - Automated testing on push
   - Version tagging and releases
   - Test coverage reporting
-
-- [x] **Subscription-scoped scanning** ✅ *Completed 2025-11-29*
-  - Accepts subscription GUID format (auto-detected)
-  - Supports multiple formats: GUID, short, full path
-  - Smart depth validation (rejects invalid depths)
-  - Auto-adjusts default depth to resource-groups
-  - Subscription name resolution via Azure API
 
 ## 📊 Medium Priority
 
