@@ -2,20 +2,23 @@
 
 ## 🎯 High Priority
 
-- [ ] **Add Excel (.xlsx) output format**
-  - Requires `openpyxl` dependency
-  - Would allow formatted, multi-sheet reports
-  - Consider making it optional to maintain zero-dependency design
+- [x] **Add Excel (.xlsx) output format** ✅ *Completed 2025-11-29*
+  - Added openpyxl optional dependency
+  - Multi-sheet workbook with formatted tables
+  - Sheets: Role Assignments, Summary, Metadata
+  - Professional formatting with auto-filters and styling
 
-- [ ] **GitHub Actions CI/CD**
+- [x] **GitHub Actions CI/CD** ⏸️ *Deferred - Issue #2 open*
   - Automated testing on push
   - Version tagging and releases
   - Test coverage reporting
 
-- [ ] **Subscription-scoped scanning**
-  - Allow `--scope` to accept subscription IDs
-  - Support format: `/subscriptions/{sub-id}` or just `{sub-id}`
-  - Useful for scanning single subscriptions without MG context
+- [x] **Subscription-scoped scanning** ✅ *Completed 2025-11-29*
+  - Accepts subscription GUID format (auto-detected)
+  - Supports multiple formats: GUID, short, full path
+  - Smart depth validation (rejects invalid depths)
+  - Auto-adjusts default depth to resource-groups
+  - Subscription name resolution via Azure API
 
 ## 📊 Medium Priority
 
@@ -171,10 +174,33 @@
   - Add: --quiet, --verbose, --very-verbose
   - Fine-grained control over output
 
----
-
 ## ✅ Recently Completed
 
+### November 29, 2025
+- ✅ **Excel (.xlsx) output format**
+  - Multi-sheet workbook with professional formatting
+  - Sheets: Role Assignments (with filters), Summary (statistics), Metadata
+  - Optional dependency (openpyxl) with graceful error handling
+  - Fully documented in README
+
+- ✅ **Subscription-scoped scanning**
+  - GUID auto-detection (xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx)
+  - Multiple format support (GUID, short, full path)
+  - Smart depth validation and auto-adjustment
+  - Subscription name resolution (shows display name instead of GUID)
+  - Comprehensive documentation and examples
+
+- ✅ **Removed 'both' output format**
+  - Simplified to just 'json', 'csv', or 'xlsx'
+  - Cleaner UX - users run twice if both formats needed
+
+- ✅ **README corrections**
+  - Fixed default depth documentation (management-groups, not subscriptions)
+  - Updated all examples to use simple scope format
+  - Added Scope Formats section with all 3 formats
+  - Updated performance benchmarks
+
+### Earlier Releases
 - ✅ Multi-level scanning (management-groups, subscriptions, resource-groups, resources)
 - ✅ Flexible scope format (simple: `my-mg`, full: `/providers/...`)
 - ✅ Resource type filtering
