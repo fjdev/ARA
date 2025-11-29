@@ -43,17 +43,23 @@ chmod +x ara
 # Scan management group only (default depth)
 ./ara --scope my-mg
 
+# Scan a specific subscription (auto-detects GUID format)
+./ara --scope xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
+
 # Export to CSV format
 ./ara --scope my-mg --format csv
 
 # Export to Excel format (requires: pip install openpyxl)
 ./ara --scope my-mg --format xlsx
 
-# Scan including subscriptions
+# Scan including subscriptions (management group scope only)
 ./ara --scope my-mg --depth subscriptions
 
 # Scan including resource groups
 ./ara --scope my-mg --depth resource-groups
+
+# Scan subscription's resource groups
+./ara --scope xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx --depth resource-groups
 
 # Scan including individual resources (use with caution on large environments)
 ./ara --scope my-mg --depth resources --max-resources 1000
@@ -123,7 +129,9 @@ TOKEN=$(az account get-access-token --resource https://management.azure.com --qu
 
 ## 🎯 Scope Formats
 
-ARA accepts management group scopes in three flexible formats:
+ARA accepts both management group and subscription scopes in multiple flexible formats:
+
+### Management Group Scopes
 
 ```bash
 # Simple format (recommended)
@@ -136,7 +144,24 @@ ARA accepts management group scopes in three flexible formats:
 ./ara --scope /providers/Microsoft.Management/managementGroups/my-mg
 ```
 
-All three formats are equivalent and will produce the same results.
+### Subscription Scopes
+
+```bash
+# Subscription GUID (recommended)
+./ara --scope xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
+
+# Short format
+./ara --scope subscriptions/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
+
+# Full Azure path format
+./ara --scope /subscriptions/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
+```
+
+**Note**: When using subscription scope:
+- Default depth automatically changes to `resource-groups`
+- The `subscriptions` depth is not available (scope is already a subscription)
+- The `management-groups` depth is not available (subscriptions don't contain management groups)
+- Valid depths: `resource-groups` or `resources`
 
 ## 📊 Output
 

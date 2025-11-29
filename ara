@@ -696,6 +696,29 @@ class ManagementGroupClient:
         return self.api_client._make_request(url)
 
 
+class SubscriptionClient:
+    """Client for Azure Subscription operations."""
+    
+    def __init__(self, api_client: AzureAPIClient):
+        """Initialize subscription client."""
+        self.api_client = api_client
+    
+    def get_subscription_details(self, subscription_id: str) -> Dict:
+        """Get subscription details including display name."""
+        url = (f"{ARAConfig.AZURE_MANAGEMENT_URL}/subscriptions/{subscription_id}"
+               f"?api-version=2020-01-01")
+        try:
+            return self.api_client._make_request(url)
+        except Exception as e:
+            logger.warning(f"Could not retrieve subscription details for {subscription_id}: {e}")
+            return {}
+    
+    def get_subscription_display_name(self, subscription_id: str) -> str:
+        """Get the display name for a subscription."""
+        details = self.get_subscription_details(subscription_id)
+        return details.get('displayName', subscription_id)
+
+
 class RoleAssignmentClient:
     """Client for Azure Role Assignment operations."""
     
@@ -1374,55 +1397,126 @@ class ARAApplication:
             if not api_client.test_authentication():
                 return ARAConfig.EXIT_CODE_ERROR
             
-            # Initialize specialized clients
+            # Initialize basic clients
             mg_client = ManagementGroupClient(api_client)
             ra_client = RoleAssignmentClient(api_client)
             graph_client = GraphAPIClient()  # Gets its own Graph token
-            rg_client = ResourceGroupClient(api_client) if args.depth in [ARAConfig.DEPTH_RESOURCE_GROUPS, ARAConfig.DEPTH_RESOURCES] else None
-            res_client = ResourceClient(api_client) if args.depth == ARAConfig.DEPTH_RESOURCES else None
             
-            # Normalize scope - support multiple formats
+            # Normalize scope - support multiple formats for both MG and subscriptions
             scope = args.scope
+            scope_type = None  # Will be 'ManagementGroup' or 'Subscription'
+            
             if not scope.startswith('/'):
-                # Just the MG ID provided (e.g., "my-mg")
-                if '/' not in scope:
+                # Detect if it's a subscription GUID format (8-4-4-4-12 hex pattern)
+                import re
+                guid_pattern = r'^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
+                
+                if re.match(guid_pattern, scope, re.IGNORECASE):
+                    # It's a subscription GUID
+                    scope = f"/subscriptions/{scope}"
+                    scope_type = 'Subscription'
+                elif scope.startswith('subscriptions/'):
+                    # Short format: subscriptions/{guid}
+                    scope = f"/{scope}"
+                    scope_type = 'Subscription'
+                elif '/' not in scope:
+                    # Just an ID - assume it's a management group
                     scope = f"/providers/Microsoft.Management/managementGroups/{scope}"
-                # Short format provided (e.g., "managementGroups/my-mg")
+                    scope_type = 'ManagementGroup'
                 elif scope.startswith('managementGroups/'):
+                    # Short format: managementGroups/my-mg
                     scope = f"/providers/Microsoft.Management/{scope}"
+                    scope_type = 'ManagementGroup'
                 else:
                     raise ValidationError(
                         f"Invalid scope format: {args.scope}\n"
                         f"Supported formats:\n"
-                        f"  - Management group ID: my-mg\n"
-                        f"  - Short format: managementGroups/my-mg\n"
-                        f"  - Full format: /providers/Microsoft.Management/managementGroups/my-mg"
+                        f"  Management Group:\n"
+                        f"    - ID: my-mg\n"
+                        f"    - Short: managementGroups/my-mg\n"
+                        f"    - Full: /providers/Microsoft.Management/managementGroups/my-mg\n"
+                        f"  Subscription:\n"
+                        f"    - GUID: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx\n"
+                        f"    - Short: subscriptions/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx\n"
+                        f"    - Full: /subscriptions/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+                    )
+            else:
+                # Full path provided - detect type
+                if '/subscriptions/' in scope:
+                    scope_type = 'Subscription'
+                elif '/managementGroups/' in scope:
+                    scope_type = 'ManagementGroup'
+                else:
+                    raise ValidationError(
+                        f"Scope must be a management group or subscription. Got: {args.scope}"
                     )
             
-            # Validate it's a management group scope
-            if '/managementGroups/' not in scope:
-                raise ValidationError(
-                    f"Scope must be a management group. Got: {args.scope}\n"
-                    f"Supported formats:\n"
-                    f"  - Management group ID: my-mg\n"
-                    f"  - Short format: managementGroups/my-mg\n"
-                    f"  - Full format: /providers/Microsoft.Management/managementGroups/my-mg"
+            # Validate depth based on scope type
+            if scope_type == 'Subscription':
+                # For subscription scope, auto-adjust default depth
+                if args.depth == ARAConfig.DEFAULT_DEPTH:  # management-groups is default
+                    logger.info(f"ℹ️  Auto-adjusting depth from '{args.depth}' to 'resource-groups' for subscription scope")
+                    args.depth = ARAConfig.DEPTH_RESOURCE_GROUPS
+                elif args.depth == ARAConfig.DEPTH_MANAGEMENT_GROUPS:
+                    raise ValidationError(
+                        f"Invalid depth '{args.depth}' for subscription scope.\n"
+                        f"Subscription scopes cannot scan management groups.\n"
+                        f"Valid depths: resource-groups, resources"
+                    )
+                elif args.depth == ARAConfig.DEPTH_SUBSCRIPTIONS:
+                    raise ValidationError(
+                        f"Invalid depth '{args.depth}' for subscription scope.\n"
+                        f"The scope is already a subscription. Use 'resource-groups' or 'resources' to scan deeper,\n"
+                        f"or omit --depth to scan only the subscription itself."
+                    )
+            
+            # Initialize depth-dependent clients (after depth may have been auto-adjusted)
+            sub_client = SubscriptionClient(api_client)
+            rg_client = ResourceGroupClient(api_client) if args.depth in [ARAConfig.DEPTH_RESOURCE_GROUPS, ARAConfig.DEPTH_RESOURCES] else None
+            res_client = ResourceClient(api_client) if args.depth == ARAConfig.DEPTH_RESOURCES else None
+            
+            # Get scopes to scan based on scope type
+            if scope_type == 'ManagementGroup':
+                mg_id = mg_client.get_management_group_id_from_scope(scope)
+                logger.info(f"📂 Management Group ID: {mg_id}")
+                logger.info(f"🎯 Scan Depth: {args.depth}")
+                
+                # Get all scopes in hierarchy
+                logger.info("\n🔍 Discovering child management groups and subscriptions...")
+                all_scopes = mg_client.get_management_group_hierarchy(mg_id)
+                logger.info(f"✅ Found {len(all_scopes)} scope(s) to process\n")
+                
+                # Scan each scope for role assignments
+                results = ScanResult(
+                    organization=mg_id,
+                    scope=scope
                 )
-            
-            mg_id = mg_client.get_management_group_id_from_scope(scope)
-            logger.info(f"📂 Management Group ID: {mg_id}")
-            logger.info(f"🎯 Scan Depth: {args.depth}")
-            
-            # Get all scopes in hierarchy
-            logger.info("\n🔍 Discovering child management groups and subscriptions...")
-            all_scopes = mg_client.get_management_group_hierarchy(mg_id)
-            logger.info(f"✅ Found {len(all_scopes)} scope(s) to process\n")
-            
-            # Scan each scope for role assignments
-            results = ScanResult(
-                organization=mg_id,
-                scope=scope
-            )
+            else:  # Subscription scope
+                subscription_id = scope.split('/')[-1]
+                
+                # Get subscription display name
+                subscription_name = sub_client.get_subscription_display_name(subscription_id)
+                
+                logger.info(f"📂 Subscription: {subscription_name}")
+                logger.info(f"   ID: {subscription_id}")
+                logger.info(f"🎯 Scan Depth: {args.depth}")
+                
+                # Create a single-scope list with just this subscription (with display name)
+                logger.info("\n🔍 Scanning subscription...")
+                subscription_scope = Scope(
+                    scope_path=scope,
+                    name=subscription_name,
+                    scope_type='Subscription',
+                    depth=0
+                )
+                all_scopes = [subscription_scope]
+                logger.info(f"✅ Ready to scan\n")
+                
+                # Scan the subscription
+                results = ScanResult(
+                    organization=subscription_name,
+                    scope=scope
+                )
             
             resource_count = 0
             
@@ -1578,14 +1672,23 @@ Examples:
   # Scan management group (full format)
   ara --scope /providers/Microsoft.Management/managementGroups/my-mg
 
-  # Include subscriptions
+  # Scan subscription (GUID format)
+  ara --scope xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
+
+  # Scan subscription (full format)
+  ara --scope /subscriptions/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
+
+  # Include subscriptions (for MG scope)
   ara --scope my-mg --depth subscriptions
+
+  # Scan resource groups in a subscription
+  ara --scope xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx --depth resource-groups
 
   # Export to CSV
   ara --scope my-mg --format csv
 
-  # Scan resource groups
-  ara --scope my-mg --depth resource-groups
+  # Export to Excel
+  ara --scope my-mg --format xlsx
 
   # Use specific token
   ara --scope my-mg --token YOUR_TOKEN
@@ -1598,7 +1701,7 @@ Examples:
     parser.add_argument(
         '--scope',
         required=True,
-        help='Management group scope. Formats: "my-mg", "managementGroups/my-mg", or "/providers/Microsoft.Management/managementGroups/my-mg"'
+        help='Scope to scan. Management Group: "my-mg" or full path. Subscription: GUID or "/subscriptions/{guid}"'
     )
     
     parser.add_argument(
