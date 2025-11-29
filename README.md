@@ -46,9 +46,6 @@ chmod +x ara
 # Export to CSV format
 ./ara --scope my-mg --format csv
 
-# Export to both JSON and CSV
-./ara --scope my-mg --format both
-
 # Scan including subscriptions
 ./ara --scope my-mg --depth subscriptions
 
@@ -299,14 +296,11 @@ Protect against runaway scans:
 ### Output Format Options
 
 ```bash
-# JSON only (default)
+# JSON output (default)
 ./ara --scope my-mg
 
-# CSV only
+# CSV output
 ./ara --scope my-mg --format csv
-
-# Both JSON and CSV
-./ara --scope my-mg --format both
 ```
 
 ### Debug Mode

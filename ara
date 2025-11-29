@@ -1233,10 +1233,9 @@ class ARAApplication:
                        f"across {results.total_scopes_scanned} scopes")
             
             # Generate outputs
-            if args.format in ['json', 'both']:
+            if args.format == 'json':
                 self.output_handlers['json'].generate(results)
-            
-            if args.format in ['csv', 'both']:
+            elif args.format == 'csv':
                 self.output_handlers['csv'].generate(results)
             
             # Always show summary
@@ -1333,11 +1332,8 @@ Examples:
   # Export to CSV
   ara --scope my-mg --format csv
 
-  # Export to both JSON and CSV
-  ara --scope my-mg --format both
-
   # Scan resource groups
-  ara --scope my-mg --depth resource-groups --format both
+  ara --scope my-mg --depth resource-groups
 
   # Use specific token
   ara --scope my-mg --token YOUR_TOKEN
@@ -1360,7 +1356,7 @@ Examples:
     
     parser.add_argument(
         '--format',
-        choices=['json', 'csv', 'both'],
+        choices=['json', 'csv'],
         default='json',
         help='Output format (default: json)'
     )
