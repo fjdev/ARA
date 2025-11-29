@@ -87,7 +87,7 @@ GitHub Issues created for these items - see https://github.com/fjdev/ARA/issues
 - ✅ "Unknown" fallback for deleted principals
 - ✅ CSV with separate Scope and Scope Type columns
 - ✅ JSON with resource_type field
-- ✅ Comprehensive test suite (53 tests: 44 unit + 9 performance, 100% pass rate)
+- ✅ Comprehensive test suite (88 tests: 79 unit + 9 performance, 100% pass rate)
 - ✅ Performance safeguards (max-resources, api-delay)
 - ✅ Default depth changed to management-groups
 - ✅ Enhanced error handling and logging
@@ -100,7 +100,8 @@ See https://github.com/fjdev/ARA/issues for remaining open issues:
 - **Issue #5**: Pagination for large datasets
 - **Issue #7**: Caching improvements  
 - **Issue #8**: Comparison mode
-- **Issue #9**: Increase test coverage to 90%+
+- **Issue #9**: Increase test coverage to 90%+ (in progress - 88 tests, est. 85-90% coverage, +66% from baseline)
+  - Note: Could improve to 100% by refactoring ara to be importable (enable coverage.py) and adding more edge case tests
 - **Issue #10**: Mock Azure API for integration tests
 
 ## 🔧 Additional Ideas (Not Yet Issues)
@@ -139,10 +140,11 @@ See https://github.com/fjdev/ARA/issues for remaining open issues:
 
 ### Testing & Quality
 
-- [ ] **Increase test coverage to 90%+** - Issue #9 open
-  - Currently: 53 tests (44 unit + 9 performance) covering core functionality
-  - Add integration tests with mock Azure API
-  - Add edge case coverage
+- [ ] **Increase test coverage to 90%+** - Issue #9 in progress
+  - Currently: 88 tests (79 unit + 9 performance) covering core functionality
+  - Added output handler tests, filter tests, API client tests
+  - Additional edge case coverage and integration tests
+  - Remaining: Full end-to-end application flow tests
 
 - [ ] **Mock Azure API for integration tests** - Issue #10 open
   - Test full scan workflow without Azure credentials

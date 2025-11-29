@@ -23,7 +23,7 @@ A professional tool for exporting Azure role assignments at management group and
 - **Robust Error Handling**: Graceful handling of API errors and permissions
 - **Production Ready**: Proper logging, validation, and OOP design
 - **Minimal Dependencies**: Core uses Python standard library (Excel/progress bar use optional dependencies)
-- **Fully Tested**: Comprehensive test suite with 53 tests (44 unit + 9 performance)
+- **Fully Tested**: Comprehensive test suite with 88 tests (79 unit + 9 performance)
 
 ## 🚀 Quick Start
 
