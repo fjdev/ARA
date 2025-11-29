@@ -23,7 +23,7 @@ A professional tool for exporting Azure role assignments at management group and
 - **Robust Error Handling**: Graceful handling of API errors and permissions
 - **Production Ready**: Proper logging, validation, and OOP design
 - **Minimal Dependencies**: Core uses Python standard library (Excel/progress bar use optional dependencies)
-- **Fully Tested**: Comprehensive test suite with 44+ unit tests
+- **Fully Tested**: Comprehensive test suite with 53+ unit and performance tests
 
 ## 🚀 Quick Start
 
@@ -523,21 +523,33 @@ az account get-access-token --resource https://management.azure.com
 - This matches Azure Portal behavior
 - The GUID is preserved in the `Principal ID` column for reference
 
-## ⚡ Performance Benchmarks
+## ⚡ Performance
 
-Approximate scan times (may vary based on network, API latency, and assignment count):
+ARA is highly optimized for enterprise-scale workloads:
 
-| Depth Level | Scopes Scanned | Typical Time | Use Case |
-|-------------|----------------|--------------|----------|
-| `management-groups` (default) | 1-50 MGs | < 1 minute | Organizational structure audit |
-| `subscriptions` | 1-100 subs | 1-3 minutes | Standard RBAC audit |
-| `resource-groups` | 100-500 RGs | 3-10 minutes | Detailed subscription audit |
-| `resources` | 1000-10000 resources | 10-60 minutes | Complete environment scan |
+- **50,000 assignments** processed in < 0.5 seconds
+- **24.67 MB memory** for 50k assignments (0.5 KB per item)
+- **Linear scaling** - predictable resource usage
+- **Efficient filtering** - 10k assignments filtered in 77ms
 
-**Tips for Large Environments**:
+### Real-World Performance
+
+| Environment Size | Scopes | Assignments | Processing Time | Memory Usage |
+|------------------|--------|-------------|-----------------|--------------|
+| Small Dev | 10 | 50 | < 1ms | 0.02 MB |
+| Small Production | 100 | 500 | 4ms | 0.24 MB |
+| Medium Enterprise | 1,000 | 5,000 | 45ms | 2.44 MB |
+| Large Enterprise | 10,000 | 50,000 | 425ms | 24.67 MB |
+
+**Note**: Total scan time includes API latency and rate limiting. Processing time above measures data handling only.
+
+For detailed benchmarks, see [PERFORMANCE.md](PERFORMANCE.md).
+
+### Tips for Large Environments
+
 - Start with `--depth subscriptions` to get baseline
 - Use `--resource-types` to focus on critical resources
-- Run resource scans during off-hours
+- Adjust `--api-delay` to balance speed vs throttling
 - Consider scanning individual subscriptions separately
 - Use `--max-resources` as a safety limit
 
