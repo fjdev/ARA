@@ -17,10 +17,11 @@ A professional tool for exporting Azure role assignments at management group and
 - **Resource Type Filtering**: Focus on specific resource types (VMs, Storage, etc.)
 - **Performance Safeguards**: Rate limiting, max resource limits, and API retry logic
 - **Multiple Output Formats**: JSON, CSV, and Excel (.xlsx) with structured data and formatting
+- **Progress Tracking**: Visual progress bar for long-running scans with ETA
 - **Comprehensive Reporting**: Detailed console summaries with statistics
 - **Robust Error Handling**: Graceful handling of API errors and permissions
 - **Production Ready**: Proper logging, validation, and OOP design
-- **Minimal Dependencies**: Core uses Python standard library (Excel output requires openpyxl)
+- **Minimal Dependencies**: Core uses Python standard library (Excel/progress bar use optional dependencies)
 - **Fully Tested**: Comprehensive test suite with 44+ unit tests
 
 ## 🚀 Quick Start
@@ -84,6 +85,7 @@ chmod +x ara
   - Read Microsoft Graph API (for principal name resolution)
 - **Network Access** to Azure Management API and Microsoft Graph API
 - **Optional**: `openpyxl` for Excel output (`pip install openpyxl`)
+- **Optional**: `tqdm` for enhanced progress bar (`pip install tqdm`)
 
 ## 🔐 Authentication
 
@@ -362,6 +364,36 @@ Protect against runaway scans:
 # Excel output (requires openpyxl)
 ./ara --scope my-mg --format xlsx
 ```
+
+### Progress Tracking
+
+ARA shows a progress bar for long-running scans to track completion and estimate remaining time.
+
+**Features:**
+- Real-time progress percentage and ETA
+- Scope count (processed/total)
+- Processing rate (scopes per second)
+- Works with simple text display (built-in) or tqdm (enhanced, optional)
+
+**Usage:**
+```bash
+# Default: progress bar enabled
+./ara --scope my-mg --depth resources
+
+# Disable progress bar
+./ara --scope my-mg --no-progress
+
+# Enhanced progress with tqdm (optional)
+pip install tqdm
+./ara --scope my-mg --depth resources
+```
+
+**Display modes:**
+- **With tqdm** (if installed): `Scanning scopes: 100%|██████████| 156/156 [01:47<00:00, 1.45scope/s]`
+- **Without tqdm** (built-in): `Scanning scopes: [████████████████████] 156/156 (100%) | ETA: 0s | 1.4 scopes/s`
+- **Debug mode**: Progress automatically disabled to show detailed logs
+
+**Note**: Progress is automatically disabled in `--debug` mode or when using `--no-progress`.
 
 ### Debug Mode
 

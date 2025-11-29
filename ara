@@ -169,6 +169,113 @@ class ValidationError(ARAError):
     pass
 
 
+# Progress Tracking
+class ProgressTracker:
+    """Progress tracking with optional tqdm support."""
+    
+    def __init__(self, total: int, desc: str = "Progress", disable: bool = False):
+        """Initialize progress tracker.
+        
+        Args:
+            total: Total number of items to process
+            desc: Description of the progress
+            disable: Disable progress display
+        """
+        self.total = total
+        self.desc = desc
+        self.current = 0
+        self.start_time = time.time()
+        self.disable = disable
+        self.tqdm_available = False
+        self.pbar = None
+        
+        # Try to import tqdm
+        if not disable:
+            try:
+                from tqdm import tqdm
+                self.tqdm_available = True
+                self.pbar = tqdm(total=total, desc=desc, unit="scope")
+            except ImportError:
+                # Fall back to simple text progress
+                self.tqdm_available = False
+                logger.debug("tqdm not available, using simple progress display")
+    
+    def update(self, n: int = 1):
+        """Update progress by n items."""
+        if self.disable:
+            return
+            
+        self.current += n
+        
+        if self.tqdm_available and self.pbar:
+            self.pbar.update(n)
+        else:
+            # Simple text-based progress
+            self._print_simple_progress()
+    
+    def _print_simple_progress(self):
+        """Print simple text-based progress."""
+        if self.total == 0:
+            return
+            
+        percentage = (self.current / self.total) * 100
+        elapsed = time.time() - self.start_time
+        
+        if self.current > 0:
+            rate = self.current / elapsed
+            eta_seconds = (self.total - self.current) / rate if rate > 0 else 0
+            eta_str = self._format_time(eta_seconds)
+            rate_str = f"{rate:.1f}" if rate < 10 else f"{rate:.0f}"
+        else:
+            eta_str = "?"
+            rate_str = "0"
+        
+        # Create progress bar visual
+        bar_width = 20
+        filled = int(bar_width * self.current / self.total)
+        bar = "█" * filled + "░" * (bar_width - filled)
+        
+        # Clear line and print progress
+        sys.stderr.write(f"\r{self.desc}: [{bar}] {self.current}/{self.total} ({percentage:.0f}%) | ETA: {eta_str} | {rate_str} scopes/s")
+        sys.stderr.flush()
+        
+        # Print newline when complete
+        if self.current >= self.total:
+            sys.stderr.write("\n")
+            sys.stderr.flush()
+    
+    def _format_time(self, seconds: float) -> str:
+        """Format seconds into human-readable time."""
+        if seconds < 60:
+            return f"{int(seconds)}s"
+        elif seconds < 3600:
+            minutes = int(seconds / 60)
+            secs = int(seconds % 60)
+            return f"{minutes}m {secs}s"
+        else:
+            hours = int(seconds / 3600)
+            minutes = int((seconds % 3600) / 60)
+            return f"{hours}h {minutes}m"
+    
+    def close(self):
+        """Close the progress tracker."""
+        if self.tqdm_available and self.pbar:
+            self.pbar.close()
+        elif not self.disable and self.current < self.total:
+            # Ensure we end the line if not completed
+            sys.stderr.write("\n")
+            sys.stderr.flush()
+    
+    def __enter__(self):
+        """Context manager entry."""
+        return self
+    
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        """Context manager exit."""
+        self.close()
+        return False
+
+
 # Data Models
 @dataclass(frozen=True)
 class RoleAssignment:
@@ -1520,58 +1627,67 @@ class ARAApplication:
             
             resource_count = 0
             
-            for scope in all_scopes:
-                # If depth is management-groups only, skip subscriptions entirely
-                if args.depth == ARAConfig.DEPTH_MANAGEMENT_GROUPS and scope.scope_type == 'Subscription':
-                    continue
-                
-                results.add_scanned_scope(scope)
-                indent = "  " * scope.depth
-                logger.info(f"{indent}🔍 Scanning: {scope.name} ({scope.scope_type})")
-                
-                # Get direct assignments for current scope
-                self._scan_scope_assignments(scope, results, ra_client, graph_client, indent)
-                
-                # If this is a subscription and we want deeper scanning
-                if scope.scope_type == 'Subscription' and args.depth in [ARAConfig.DEPTH_RESOURCE_GROUPS, ARAConfig.DEPTH_RESOURCES]:
-                    subscription_id = scope.scope_path.split('/')[-1]
+            # Initialize progress tracker
+            # Disable progress if debug mode is on or if explicitly disabled
+            show_progress = not (args.debug or args.no_progress)
+            
+            with ProgressTracker(total=len(all_scopes), desc="Scanning scopes", disable=not show_progress) as progress:
+                for scope in all_scopes:
+                    # If depth is management-groups only, skip subscriptions entirely
+                    if args.depth == ARAConfig.DEPTH_MANAGEMENT_GROUPS and scope.scope_type == 'Subscription':
+                        progress.update(1)
+                        continue
                     
-                    # Get resource groups
-                    logger.info(f"{indent}  📦 Listing resource groups...")
-                    resource_groups = rg_client.list_resource_groups(subscription_id)
-                    logger.info(f"{indent}  ✅ Found {len(resource_groups)} resource group(s)")
+                    results.add_scanned_scope(scope)
+                    indent = "  " * scope.depth
+                    logger.info(f"{indent}🔍 Scanning: {scope.name} ({scope.scope_type})")
                     
-                    for rg in resource_groups:
-                        if resource_count >= args.max_resources:
-                            logger.warning(f"{indent}    ⚠️  Reached max resource limit ({args.max_resources}). Stopping resource scan.")
-                            break
+                    # Get direct assignments for current scope
+                    self._scan_scope_assignments(scope, results, ra_client, graph_client, indent)
+                    
+                    # If this is a subscription and we want deeper scanning
+                    if scope.scope_type == 'Subscription' and args.depth in [ARAConfig.DEPTH_RESOURCE_GROUPS, ARAConfig.DEPTH_RESOURCES]:
+                        subscription_id = scope.scope_path.split('/')[-1]
                         
-                        results.add_scanned_scope(rg)
-                        rg_indent = indent + "    "
-                        logger.info(f"{rg_indent}🔍 Scanning: {rg.name} (Resource Group)")
+                        # Get resource groups
+                        logger.info(f"{indent}  📦 Listing resource groups...")
+                        resource_groups = rg_client.list_resource_groups(subscription_id)
+                        logger.info(f"{indent}  ✅ Found {len(resource_groups)} resource group(s)")
                         
-                        # Scan resource group assignments
-                        self._scan_scope_assignments(rg, results, ra_client, graph_client, rg_indent)
-                        
-                        # If we want individual resources
-                        if args.depth == ARAConfig.DEPTH_RESOURCES:
-                            rg_name = rg.name
-                            logger.info(f"{rg_indent}  📦 Listing resources...")
-                            resources = res_client.list_resources(subscription_id, rg_name, args.resource_types)
-                            logger.info(f"{rg_indent}  ✅ Found {len(resources)} resource(s)")
+                        for rg in resource_groups:
+                            if resource_count >= args.max_resources:
+                                logger.warning(f"{indent}    ⚠️  Reached max resource limit ({args.max_resources}). Stopping resource scan.")
+                                break
                             
-                            for resource in resources:
-                                if resource_count >= args.max_resources:
-                                    logger.warning(f"{rg_indent}    ⚠️  Reached max resource limit ({args.max_resources}). Stopping.")
-                                    break
+                            results.add_scanned_scope(rg)
+                            rg_indent = indent + "    "
+                            logger.info(f"{rg_indent}🔍 Scanning: {rg.name} (Resource Group)")
+                            
+                            # Scan resource group assignments
+                            self._scan_scope_assignments(rg, results, ra_client, graph_client, rg_indent)
+                            
+                            # If we want individual resources
+                            if args.depth == ARAConfig.DEPTH_RESOURCES:
+                                rg_name = rg.name
+                                logger.info(f"{rg_indent}  📦 Listing resources...")
+                                resources = res_client.list_resources(subscription_id, rg_name, args.resource_types)
+                                logger.info(f"{rg_indent}  ✅ Found {len(resources)} resource(s)")
                                 
-                                results.add_scanned_scope(resource)
-                                res_indent = rg_indent + "      "
-                                logger.info(f"{res_indent}🔍 {resource.name} ({resource.resource_type})")
-                                
-                                # Scan individual resource assignments
-                                self._scan_scope_assignments(resource, results, ra_client, graph_client, res_indent)
-                                resource_count += 1
+                                for resource in resources:
+                                    if resource_count >= args.max_resources:
+                                        logger.warning(f"{rg_indent}    ⚠️  Reached max resource limit ({args.max_resources}). Stopping.")
+                                        break
+                                    
+                                    results.add_scanned_scope(resource)
+                                    res_indent = rg_indent + "      "
+                                    logger.info(f"{res_indent}🔍 {resource.name} ({resource.resource_type})")
+                                    
+                                    # Scan individual resource assignments
+                                    self._scan_scope_assignments(resource, results, ra_client, graph_client, res_indent)
+                                    resource_count += 1
+                    
+                    # Update progress after processing each scope
+                    progress.update(1)
             
             logger.info(f"\n✅ Scan complete: {results.total_assignments_found} assignments "
                        f"across {results.total_scopes_scanned} scopes")
@@ -1756,6 +1872,12 @@ Examples:
         '--debug',
         action='store_true',
         help='Enable debug output'
+    )
+    
+    parser.add_argument(
+        '--no-progress',
+        action='store_true',
+        help='Disable progress bar display'
     )
     
     parser.add_argument(
