@@ -40,30 +40,33 @@ chmod +x ara
 ### Basic Usage
 
 ```bash
-# Scan management group and subscriptions (default depth)
-./ara --scope /providers/Microsoft.Management/managementGroups/my-mg
+# Scan management group only (default depth)
+./ara --scope my-mg
 
 # Export to CSV format
-./ara --scope /providers/Microsoft.Management/managementGroups/my-mg --format csv
+./ara --scope my-mg --format csv
 
 # Export to both JSON and CSV
-./ara --scope /providers/Microsoft.Management/managementGroups/my-mg --format both
+./ara --scope my-mg --format both
+
+# Scan including subscriptions
+./ara --scope my-mg --depth subscriptions
 
 # Scan including resource groups
-./ara --scope /providers/Microsoft.Management/managementGroups/my-mg --depth resource-groups
+./ara --scope my-mg --depth resource-groups
 
 # Scan including individual resources (use with caution on large environments)
-./ara --scope /providers/Microsoft.Management/managementGroups/my-mg --depth resources --max-resources 1000
+./ara --scope my-mg --depth resources --max-resources 1000
 
 # Filter specific resource types
-./ara --scope /providers/Microsoft.Management/managementGroups/my-mg --depth resources \
+./ara --scope my-mg --depth resources \
   --resource-types Microsoft.Compute/virtualMachines Microsoft.Storage/storageAccounts
 
 # Slow down API calls to avoid rate limiting
-./ara --scope /providers/Microsoft.Management/managementGroups/my-mg --api-delay 0.5
+./ara --scope my-mg --api-delay 0.5
 
 # Debug mode for troubleshooting
-./ara --scope /providers/Microsoft.Management/managementGroups/my-mg --debug
+./ara --scope my-mg --debug
 ```
 
 ## 📋 Requirements
@@ -114,8 +117,25 @@ export AZURE_ACCESS_TOKEN="$TOKEN"
 TOKEN=$(az account get-access-token --resource https://management.azure.com --query accessToken -o tsv)
 
 # Use directly
-./ara --scope /providers/Microsoft.Management/managementGroups/my-mg --token "$TOKEN"
+./ara --scope my-mg --token "$TOKEN"
 ```
+
+## 🎯 Scope Formats
+
+ARA accepts management group scopes in three flexible formats:
+
+```bash
+# Simple format (recommended)
+./ara --scope my-mg
+
+# Short format
+./ara --scope managementGroups/my-mg
+
+# Full Azure path format
+./ara --scope /providers/Microsoft.Management/managementGroups/my-mg
+```
+
+All three formats are equivalent and will produce the same results.
 
 ## 📊 Output
 
@@ -199,31 +219,31 @@ Unknown,a1b2c3d4-...,ServicePrincipal,Reader,storage-prod,Resource,Microsoft.Sto
 
 ARA supports four depth levels to control how deep the scan goes:
 
-#### 1. Management Groups Only (`management-groups`)
+#### 1. Management Groups Only (Default - `management-groups`)
 Scans only management group hierarchies, no subscriptions:
 ```bash
-./ara --scope /providers/Microsoft.Management/managementGroups/my-mg --depth management-groups
+./ara --scope my-mg --depth management-groups
+# Or simply (default):
+./ara --scope my-mg
 ```
 
-#### 2. Subscriptions (Default - `subscriptions`)
+#### 2. Subscriptions (`subscriptions`)
 Scans management groups and all subscriptions:
 ```bash
-./ara --scope /providers/Microsoft.Management/managementGroups/my-mg --depth subscriptions
-# Or simply (default):
-./ara --scope /providers/Microsoft.Management/managementGroups/my-mg
+./ara --scope my-mg --depth subscriptions
 ```
 
 #### 3. Resource Groups (`resource-groups`)
 Scans management groups, subscriptions, AND resource groups:
 ```bash
-./ara --scope /providers/Microsoft.Management/managementGroups/my-mg --depth resource-groups
+./ara --scope my-mg --depth resource-groups
 ```
 ⚠️ **Performance**: Can take several minutes for environments with many resource groups.
 
 #### 4. Individual Resources (`resources`)
 Scans everything including individual resources (VMs, storage accounts, etc.):
 ```bash
-./ara --scope /providers/Microsoft.Management/managementGroups/my-mg --depth resources \
+./ara --scope my-mg --depth resources \
   --max-resources 5000 --api-delay 0.3
 ```
 ⚠️ **Performance**: Can take significant time for large environments. Use `--max-resources` to limit scope.
@@ -234,15 +254,15 @@ Focus on specific Azure resource types when using `--depth resources`:
 
 ```bash
 # Only VMs
-./ara --scope /providers/Microsoft.Management/managementGroups/my-mg --depth resources \
+./ara --scope my-mg --depth resources \
   --resource-types Microsoft.Compute/virtualMachines
 
 # VMs and Storage Accounts
-./ara --scope /providers/Microsoft.Management/managementGroups/my-mg --depth resources \
+./ara --scope my-mg --depth resources \
   --resource-types Microsoft.Compute/virtualMachines Microsoft.Storage/storageAccounts
 
 # All network resources
-./ara --scope /providers/Microsoft.Management/managementGroups/my-mg --depth resources \
+./ara --scope my-mg --depth resources \
   --resource-types Microsoft.Network/virtualNetworks Microsoft.Network/networkSecurityGroups
 ```
 
@@ -252,13 +272,13 @@ Focus on specific Azure resource types when using `--depth resources`:
 Control API call frequency to avoid throttling:
 ```bash
 # Default: 0.1 seconds between API calls
-./ara --scope /providers/Microsoft.Management/managementGroups/my-mg
+./ara --scope my-mg
 
 # Slower (safer for large scans)
-./ara --scope /providers/Microsoft.Management/managementGroups/my-mg --api-delay 0.5
+./ara --scope my-mg --api-delay 0.5
 
 # Faster (risk of rate limiting)
-./ara --scope /providers/Microsoft.Management/managementGroups/my-mg --api-delay 0.05
+./ara --scope my-mg --api-delay 0.05
 ```
 
 ARA automatically implements:
@@ -270,29 +290,29 @@ ARA automatically implements:
 Protect against runaway scans:
 ```bash
 # Limit to 1000 resources
-./ara --scope /providers/Microsoft.Management/managementGroups/my-mg --depth resources --max-resources 1000
+./ara --scope my-mg --depth resources --max-resources 1000
 
 # Default limit (10,000 resources)
-./ara --scope /providers/Microsoft.Management/managementGroups/my-mg --depth resources
+./ara --scope my-mg --depth resources
 ```
 
 ### Output Format Options
 
 ```bash
 # JSON only (default)
-./ara --scope /providers/Microsoft.Management/managementGroups/my-mg
+./ara --scope my-mg
 
 # CSV only
-./ara --scope /providers/Microsoft.Management/managementGroups/my-mg --format csv
+./ara --scope my-mg --format csv
 
 # Both JSON and CSV
-./ara --scope /providers/Microsoft.Management/managementGroups/my-mg --format both
+./ara --scope my-mg --format both
 ```
 
 ### Debug Mode
 
 ```bash
-./ara --scope /providers/Microsoft.Management/managementGroups/my-mg --debug
+./ara --scope my-mg --debug
 ```
 
 ## 🛠️ Troubleshooting
@@ -308,7 +328,7 @@ az account show
 az account get-access-token --resource https://management.azure.com
 
 # Use debug mode to see authentication flow
-./ara --scope /providers/Microsoft.Management/managementGroups/my-mg --debug
+./ara --scope my-mg --debug
 ```
 
 **Permission Denied**
@@ -343,8 +363,8 @@ Approximate scan times (may vary based on network, API latency, and assignment c
 
 | Depth Level | Scopes Scanned | Typical Time | Use Case |
 |-------------|----------------|--------------|----------|
-| `management-groups` | 1-50 MGs | < 1 minute | Organizational structure audit |
-| `subscriptions` (default) | 1-100 subs | 1-3 minutes | Standard RBAC audit |
+| `management-groups` (default) | 1-50 MGs | < 1 minute | Organizational structure audit |
+| `subscriptions` | 1-100 subs | 1-3 minutes | Standard RBAC audit |
 | `resource-groups` | 100-500 RGs | 3-10 minutes | Detailed subscription audit |
 | `resources` | 1000-10000 resources | 10-60 minutes | Complete environment scan |
 
