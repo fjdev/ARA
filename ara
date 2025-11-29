@@ -34,6 +34,7 @@ import functools
 import json
 import logging
 import os
+import re
 import signal
 import subprocess
 import sys
@@ -276,6 +277,125 @@ class ProgressTracker:
         return False
 
 
+class AssignmentFilter:
+    """Filter role assignments based on various criteria."""
+    
+    def __init__(self, args):
+        """Initialize filters from command-line arguments.
+        
+        Args:
+            args: Parsed command-line arguments
+        """
+        self.role_filter = self._parse_list_filter(args.role_filter)
+        self.principal_type_filter = self._parse_list_filter(args.principal_type_filter)
+        self.principal_name_pattern = None
+        self.exclude_system = args.exclude_system
+        
+        # Compile regex pattern for principal name filter
+        if args.principal_name_filter:
+            try:
+                self.principal_name_pattern = re.compile(args.principal_name_filter, re.IGNORECASE)
+            except re.error as e:
+                raise ValueError(f"Invalid regex pattern in --principal-name-filter: {e}")
+    
+    @staticmethod
+    def _parse_list_filter(filter_value: Optional[str]) -> Optional[List[str]]:
+        """Parse comma-separated filter values.
+        
+        Args:
+            filter_value: Comma-separated string or None
+            
+        Returns:
+            List of lowercase values or None
+        """
+        if not filter_value:
+            return None
+        return [v.strip().lower() for v in filter_value.split(',') if v.strip()]
+    
+    def apply(self, assignments: List['RoleAssignment']) -> List['RoleAssignment']:
+        """Apply all filters to a list of role assignments.
+        
+        Args:
+            assignments: List of role assignments to filter
+            
+        Returns:
+            Filtered list of role assignments
+        """
+        if not self.has_filters():
+            return assignments
+        
+        filtered = []
+        for assignment in assignments:
+            if self._matches(assignment):
+                filtered.append(assignment)
+        
+        return filtered
+    
+    def has_filters(self) -> bool:
+        """Check if any filters are configured.
+        
+        Returns:
+            True if any filters are active
+        """
+        return bool(
+            self.role_filter or
+            self.principal_type_filter or
+            self.principal_name_pattern or
+            self.exclude_system
+        )
+    
+    def _matches(self, assignment: 'RoleAssignment') -> bool:
+        """Check if an assignment matches all filter criteria.
+        
+        Args:
+            assignment: Role assignment to check
+            
+        Returns:
+            True if assignment matches all filters
+        """
+        # Role filter
+        if self.role_filter and assignment.role_name.lower() not in self.role_filter:
+            return False
+        
+        # Principal type filter
+        if self.principal_type_filter and assignment.principal_type.lower() not in self.principal_type_filter:
+            return False
+        
+        # Principal name pattern filter
+        if self.principal_name_pattern and not self.principal_name_pattern.search(assignment.principal_name):
+            return False
+        
+        # Exclude system-assigned managed identities
+        if self.exclude_system and assignment.principal_type.lower() == 'serviceprincipal':
+            # System-assigned managed identities typically have names matching the resource
+            if assignment.principal_name and assignment.principal_name.lower().startswith('system-'):
+                return False
+        
+        return True
+    
+    def get_summary(self) -> Dict[str, Any]:
+        """Get a summary of active filters.
+        
+        Returns:
+            Dictionary describing active filters
+        """
+        summary = {}
+        
+        if self.role_filter:
+            summary['role_filter'] = ', '.join(self.role_filter)
+        
+        if self.principal_type_filter:
+            summary['principal_type_filter'] = ', '.join(self.principal_type_filter)
+        
+        if self.principal_name_pattern:
+            summary['principal_name_filter'] = self.principal_name_pattern.pattern
+        
+        if self.exclude_system:
+            summary['exclude_system'] = True
+        
+        return summary
+
+
 # Data Models
 @dataclass(frozen=True)
 class RoleAssignment:
@@ -406,6 +526,7 @@ class ScanResult:
     total_assignments_found: int = 0
     assignments: List[RoleAssignment] = field(default_factory=list)
     scanned_scopes: List[Scope] = field(default_factory=list)
+    filters_applied: Dict[str, Any] = field(default_factory=dict)
     
     def add_assignment(self, assignment: RoleAssignment):
         """Add a role assignment to results."""
@@ -1145,15 +1266,21 @@ class JSONOutputHandler(OutputHandler):
     
     def _build_json_structure(self, results: ScanResult) -> Dict:
         """Build JSON output structure."""
+        metadata = {
+            "tool": "Azure Role Assignment Exporter (ARA)",
+            "version": __version__,
+            "scan_timestamp": results.scan_timestamp,
+            "scope": results.scope,
+            "total_scopes_scanned": results.total_scopes_scanned,
+            "total_assignments_found": results.total_assignments_found
+        }
+        
+        # Add filter information if filters were applied
+        if results.filters_applied:
+            metadata["filters_applied"] = results.filters_applied
+        
         return {
-            "metadata": {
-                "tool": "Azure Role Assignment Exporter (ARA)",
-                "version": __version__,
-                "scan_timestamp": results.scan_timestamp,
-                "scope": results.scope,
-                "total_scopes_scanned": results.total_scopes_scanned,
-                "total_assignments_found": results.total_assignments_found
-            },
+            "metadata": metadata,
             "scopes_scanned": [
                 {
                     "scope_path": scope.scope_path,
@@ -1466,15 +1593,23 @@ class ExcelOutputHandler(OutputHandler):
             ("Total Assignments Found", results.total_assignments_found),
         ]
         
+        # Add filter information if filters were applied
+        if results.filters_applied:
+            metadata.append(("", ""))  # Empty row separator
+            metadata.append(("Filters Applied", ""))
+            for key, value in results.filters_applied.items():
+                metadata.append((f"  {key}", str(value)))
+        
         row = 3
         for key, value in metadata:
             ws[f'A{row}'] = key
             ws[f'B{row}'] = value
-            ws[f'A{row}'].font = Font(bold=True)
+            if value and not key.startswith("  "):  # Bold unless it's a filter detail
+                ws[f'A{row}'].font = Font(bold=True)
             row += 1
         
         # Column widths
-        ws.column_dimensions['A'].width = 25
+        ws.column_dimensions['A'].width = 30
         ws.column_dimensions['B'].width = 50
 
 
@@ -1582,6 +1717,14 @@ class ARAApplication:
             rg_client = ResourceGroupClient(api_client) if args.depth in [ARAConfig.DEPTH_RESOURCE_GROUPS, ARAConfig.DEPTH_RESOURCES] else None
             res_client = ResourceClient(api_client) if args.depth == ARAConfig.DEPTH_RESOURCES else None
             
+            # Initialize assignment filter
+            assignment_filter = AssignmentFilter(args)
+            if assignment_filter.has_filters():
+                logger.info("📌 Active Filters:")
+                for key, value in assignment_filter.get_summary().items():
+                    logger.info(f"   {key}: {value}")
+                logger.info("")
+            
             # Get scopes to scan based on scope type
             if scope_type == 'ManagementGroup':
                 mg_id = mg_client.get_management_group_id_from_scope(scope)
@@ -1596,7 +1739,8 @@ class ARAApplication:
                 # Scan each scope for role assignments
                 results = ScanResult(
                     organization=mg_id,
-                    scope=scope
+                    scope=scope,
+                    filters_applied=assignment_filter.get_summary()
                 )
             else:  # Subscription scope
                 subscription_id = scope.split('/')[-1]
@@ -1622,7 +1766,8 @@ class ARAApplication:
                 # Scan the subscription
                 results = ScanResult(
                     organization=subscription_name,
-                    scope=scope
+                    scope=scope,
+                    filters_applied=assignment_filter.get_summary()
                 )
             
             resource_count = 0
@@ -1643,7 +1788,7 @@ class ARAApplication:
                     logger.info(f"{indent}🔍 Scanning: {scope.name} ({scope.scope_type})")
                     
                     # Get direct assignments for current scope
-                    self._scan_scope_assignments(scope, results, ra_client, graph_client, indent)
+                    self._scan_scope_assignments(scope, results, ra_client, graph_client, indent, assignment_filter)
                     
                     # If this is a subscription and we want deeper scanning
                     if scope.scope_type == 'Subscription' and args.depth in [ARAConfig.DEPTH_RESOURCE_GROUPS, ARAConfig.DEPTH_RESOURCES]:
@@ -1664,7 +1809,7 @@ class ARAApplication:
                             logger.info(f"{rg_indent}🔍 Scanning: {rg.name} (Resource Group)")
                             
                             # Scan resource group assignments
-                            self._scan_scope_assignments(rg, results, ra_client, graph_client, rg_indent)
+                            self._scan_scope_assignments(rg, results, ra_client, graph_client, rg_indent, assignment_filter)
                             
                             # If we want individual resources
                             if args.depth == ARAConfig.DEPTH_RESOURCES:
@@ -1683,7 +1828,7 @@ class ARAApplication:
                                     logger.info(f"{res_indent}🔍 {resource.name} ({resource.resource_type})")
                                     
                                     # Scan individual resource assignments
-                                    self._scan_scope_assignments(resource, results, ra_client, graph_client, res_indent)
+                                    self._scan_scope_assignments(resource, results, ra_client, graph_client, res_indent, assignment_filter)
                                     resource_count += 1
                     
                     # Update progress after processing each scope
@@ -1722,14 +1867,23 @@ class ARAApplication:
     def _scan_scope_assignments(self, scope: Scope, results: ScanResult, 
                                 ra_client: RoleAssignmentClient, 
                                 graph_client: GraphAPIClient, 
-                                indent: str) -> None:
-        """Scan role assignments for a specific scope."""
+                                indent: str,
+                                assignment_filter: Optional['AssignmentFilter'] = None) -> None:
+        """Scan role assignments for a specific scope.
+        
+        Args:
+            scope: Scope to scan
+            results: Results object to add assignments to
+            ra_client: Role assignment client
+            graph_client: Graph API client
+            indent: Logging indentation
+            assignment_filter: Optional filter to apply to assignments
+        """
         assignments_data = ra_client.get_direct_assignments_for_scope(scope)
         
         if assignments_data:
-            logger.info(f"{indent}  📋 Found {len(assignments_data)} direct assignment(s)")
-            
             # Process each assignment
+            all_assignments = []
             for assignment_data in assignments_data:
                 props = assignment_data.get('properties', {})
                 principal_id = props.get('principalId', '')
@@ -1759,7 +1913,20 @@ class ARAApplication:
                     scope_type=scope.scope_type,
                     resource_type=scope.resource_type
                 )
-                results.add_assignment(role_assignment)
+                all_assignments.append(role_assignment)
+            
+            # Apply filters if configured
+            if assignment_filter and assignment_filter.has_filters():
+                filtered_assignments = assignment_filter.apply(all_assignments)
+                logger.info(f"{indent}  📋 Found {len(all_assignments)} direct assignment(s) "
+                           f"({len(filtered_assignments)} after filtering)")
+            else:
+                filtered_assignments = all_assignments
+                logger.info(f"{indent}  📋 Found {len(filtered_assignments)} direct assignment(s)")
+            
+            # Add filtered assignments to results
+            for assignment in filtered_assignments:
+                results.add_assignment(assignment)
         else:
             logger.info(f"{indent}  ⚪ No direct assignments")
 
@@ -1866,6 +2033,34 @@ Examples:
         default=ARAConfig.DEFAULT_API_DELAY,
         help=f'Delay between API calls in seconds (default: {ARAConfig.DEFAULT_API_DELAY}). '
              'Increase to avoid rate limiting'
+    )
+    
+    parser.add_argument(
+        '--role-filter',
+        type=str,
+        help='Filter by role name (comma-separated for multiple). '
+             'Example: --role-filter "Owner,Contributor"'
+    )
+    
+    parser.add_argument(
+        '--principal-type-filter',
+        type=str,
+        help='Filter by principal type (comma-separated for multiple). '
+             'Valid types: User, Group, ServicePrincipal. '
+             'Example: --principal-type-filter "User,Group"'
+    )
+    
+    parser.add_argument(
+        '--principal-name-filter',
+        type=str,
+        help='Filter by principal name (supports regex patterns). '
+             'Example: --principal-name-filter "^Admin.*"'
+    )
+    
+    parser.add_argument(
+        '--exclude-system',
+        action='store_true',
+        help='Exclude system-assigned managed identities from results'
     )
     
     parser.add_argument(

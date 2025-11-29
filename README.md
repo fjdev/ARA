@@ -17,6 +17,7 @@ A professional tool for exporting Azure role assignments at management group and
 - **Resource Type Filtering**: Focus on specific resource types (VMs, Storage, etc.)
 - **Performance Safeguards**: Rate limiting, max resource limits, and API retry logic
 - **Multiple Output Formats**: JSON, CSV, and Excel (.xlsx) with structured data and formatting
+- **Enhanced Filtering**: Filter by role, principal type, principal name (regex), or exclude system identities
 - **Progress Tracking**: Visual progress bar for long-running scans with ETA
 - **Comprehensive Reporting**: Detailed console summaries with statistics
 - **Robust Error Handling**: Graceful handling of API errors and permissions
@@ -394,6 +395,85 @@ pip install tqdm
 - **Debug mode**: Progress automatically disabled to show detailed logs
 
 **Note**: Progress is automatically disabled in `--debug` mode or when using `--no-progress`.
+
+### Enhanced Filtering
+
+ARA supports advanced filtering to focus on specific role assignments:
+
+#### Role Filter
+
+Filter by role name (comma-separated for multiple):
+
+```bash
+# Find all Owner assignments
+./ara --scope my-mg --role-filter "Owner"
+
+# Multiple roles
+./ara --scope my-mg --role-filter "Owner,Contributor,Reader"
+```
+
+#### Principal Type Filter
+
+Filter by principal type (User, Group, ServicePrincipal):
+
+```bash
+# Only service principals
+./ara --scope my-mg --principal-type-filter "ServicePrincipal"
+
+# Users and groups only
+./ara --scope my-mg --principal-type-filter "User,Group"
+```
+
+#### Principal Name Filter
+
+Filter by principal name using regex patterns:
+
+```bash
+# Service principals starting with "sp-"
+./ara --scope my-mg --principal-name-filter "^sp-.*"
+
+# Admins
+./ara --scope my-mg --principal-name-filter ".*admin.*"
+
+# Specific naming pattern
+./ara --scope my-mg --principal-name-filter "^(dev|test|prod)-.*"
+```
+
+#### Exclude System Identities
+
+Exclude system-assigned managed identities:
+
+```bash
+./ara --scope my-mg --exclude-system
+```
+
+#### Combined Filters
+
+Filters can be combined for powerful queries:
+
+```bash
+# Find all Owner or Contributor service principals
+./ara --scope my-mg --role-filter "Owner,Contributor" --principal-type-filter "ServicePrincipal"
+
+# Find admin users with elevated roles
+./ara --scope my-mg --principal-name-filter ".*admin.*" --principal-type-filter "User" --role-filter "Owner,Contributor"
+
+# Security audit: Find all users with Owner role, excluding system accounts
+./ara --scope my-mg --role-filter "Owner" --principal-type-filter "User" --exclude-system
+```
+
+**Features:**
+- **Post-processing**: Filters are applied after fetching (all assignments are retrieved, then filtered)
+- **Case-insensitive**: All text matching is case-insensitive
+- **Regex support**: Principal name filter supports full regex patterns
+- **Metadata tracking**: Applied filters are documented in JSON/Excel outputs
+- **Count reporting**: Shows both total found and filtered counts in logs
+
+**Use Cases:**
+- **Security audits**: Find all Owner assignments across your organization
+- **Cleanup operations**: Identify unused service principal assignments
+- **Compliance reporting**: Filter specific principal types or roles
+- **Investigation**: Search for assignments by naming patterns
 
 ### Debug Mode
 
