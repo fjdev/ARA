@@ -1064,15 +1064,19 @@ class PIMClient:
         return eligibility_data
     
     def get_time_bound_active_assignments_for_scope(self, scope: Scope) -> List[Dict]:
-        """Get time-bound active role assignments (PIM) for a specific scope.
+        """Get active role assignment schedule instances (PIM) for a specific scope.
         
-        This fetches assignments that were activated through PIM and have an end date.
+        This fetches ALL assignments from the roleAssignmentScheduleInstances API, which includes:
+        - Time-bound active assignments (PIM-activated with endDateTime)
+        - Permanent active assignments created via PIM (no endDateTime, typically service principals)
+        
+        Caller must check endDateTime to distinguish between permanent and time-bound.
         
         Args:
             scope: Scope to scan
             
         Returns:
-            List of time-bound active assignment data dictionaries
+            List of active assignment schedule data dictionaries
         """
         time_bound_data = []
         
@@ -2134,7 +2138,12 @@ class ARAApplication:
                     except Exception:
                         principal_name = principal_id
                     
-                    # Create role assignment (time-bound active)
+                    # Determine if active assignment is permanent or time-bound
+                    # Per Microsoft docs: check endDateTime to distinguish permanent vs time-bound
+                    # Service principals with no endDateTime are "Active permanent" (not eligible-based)
+                    assignment_type = "Active time-bound" if end_date else "Active permanent"
+                    
+                    # Create role assignment
                     role_assignment = RoleAssignment(
                         principal_id=principal_id,
                         principal_name=principal_name,
@@ -2145,12 +2154,16 @@ class ARAApplication:
                         scope_name=scope.name,
                         scope_type=scope.scope_type,
                         resource_type=scope.resource_type,
-                        assignment_type="Active time-bound",
+                        assignment_type=assignment_type,
                         start_date_time=start_date,
                         end_date_time=end_date
                     )
                     all_assignments.append(role_assignment)
-                    active_timebound_count += 1
+                    
+                    if assignment_type == "Active permanent":
+                        active_permanent_count += 1
+                    else:
+                        active_timebound_count += 1
                     
             except Exception as e:
                 logger.warning(f"⚠️  Could not fetch PIM time-bound active assignments for {scope.name}: {e}")
