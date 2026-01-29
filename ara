@@ -4,9 +4,12 @@ Azure Role Assignment Exporter (ARA)
 ====================================
 
 A professional tool for exporting Azure role assignments at management group
-and subscription scopes with comprehensive reporting and multiple output formats.
+and subscription scopes with comprehensive reporting, PIM integration, and 
+multiple output formats.
 
 Features:
+- PIM (Privileged Identity Management) integration - distinguish between active 
+  permanent, active time-bound, eligible permanent, and eligible time-bound assignments
 - Multiple authentication methods (environment, Azure CLI, keychain, interactive)
 - Hierarchical management group scanning
 - Principal name resolution via Microsoft Graph API
@@ -19,10 +22,11 @@ Requirements:
 - Python 3.7+
 - Azure credentials with appropriate permissions
 - Read access to role assignments and management groups
+- Optional: PIM read permissions for eligible and time-bound assignments
 
 Author: fjdev
 License: MIT
-Version: 1.0.0
+Version: 2.0.0
 """
 
 # Standard library imports
@@ -2040,10 +2044,14 @@ class ARAApplication:
         # PIM APIs only work for management groups, subscriptions, and resource groups (not individual resources)
         pim_supported_scope = scope.scope_type in ('Management Group', 'Subscription', 'Resource Group')
         
+        # Track assignments by unique key (principal_id + role_id + scope) to avoid duplicates
+        seen_assignments = set()
+        
         if not skip_pim and pim_supported_scope:
             # Try to fetch PIM data (eligible and time-bound active assignments)
+            
+            # Fetch eligible assignments (PIM)
             try:
-                # Fetch eligible assignments (PIM)
                 eligible_data = pim_client.get_eligible_assignments_for_scope(scope)
                 
                 for eligibility_data in eligible_data:
@@ -2053,6 +2061,12 @@ class ARAApplication:
                     role_def_id = props.get('roleDefinitionId', '')
                     start_date = props.get('startDateTime')
                     end_date = props.get('endDateTime')
+                    
+                    # Create unique key for deduplication
+                    assignment_key = (principal_id, role_def_id, scope.scope_path.lower())
+                    if assignment_key in seen_assignments:
+                        continue
+                    seen_assignments.add(assignment_key)
                     
                     # Determine if eligible assignment is permanent or time-bound
                     assignment_type = "Eligible time-bound" if end_date else "Eligible permanent"
@@ -2087,8 +2101,13 @@ class ARAApplication:
                         eligible_permanent_count += 1
                     else:
                         eligible_timebound_count += 1
-                
-                # Fetch time-bound active assignments (PIM activated)
+                        
+            except Exception as e:
+                logger.warning(f"⚠️  Could not fetch PIM eligible assignments for {scope.name}: {e}")
+                logger.debug(f"PIM eligible assignments API error details: {e}", exc_info=True)
+            
+            # Fetch time-bound active assignments (PIM activated)
+            try:
                 timebound_data = pim_client.get_time_bound_active_assignments_for_scope(scope)
                 
                 for timebound_assignment in timebound_data:
@@ -2098,6 +2117,13 @@ class ARAApplication:
                     role_def_id = props.get('roleDefinitionId', '')
                     start_date = props.get('startDateTime')
                     end_date = props.get('endDateTime')
+                    
+                    # Create unique key for deduplication
+                    assignment_key = (principal_id, role_def_id, scope.scope_path.lower())
+                    if assignment_key in seen_assignments:
+                        logger.debug(f"Skipping duplicate time-bound active assignment: {principal_id} / {role_def_id}")
+                        continue
+                    seen_assignments.add(assignment_key)
                     
                     # Get role name
                     role_name = ra_client.get_role_definition(role_def_id)
@@ -2127,7 +2153,8 @@ class ARAApplication:
                     active_timebound_count += 1
                     
             except Exception as e:
-                logger.debug(f"PIM API calls failed for {scope.name}: {e}")
+                logger.warning(f"⚠️  Could not fetch PIM time-bound active assignments for {scope.name}: {e}")
+                logger.debug(f"PIM time-bound active assignments API error details: {e}", exc_info=True)
         
         # Fetch standard permanent active role assignments
         assignments_data = ra_client.get_direct_assignments_for_scope(scope)
@@ -2137,6 +2164,13 @@ class ARAApplication:
             principal_id = props.get('principalId', '')
             principal_type = props.get('principalType', 'Unknown')
             role_def_id = props.get('roleDefinitionId', '')
+            
+            # Create unique key for deduplication (avoid counting PIM-activated assignments twice)
+            assignment_key = (principal_id, role_def_id, scope.scope_path.lower())
+            if assignment_key in seen_assignments:
+                logger.debug(f"Skipping duplicate standard assignment: {principal_id} / {role_def_id}")
+                continue
+            seen_assignments.add(assignment_key)
             
             # Get role name
             role_name = ra_client.get_role_definition(role_def_id)
