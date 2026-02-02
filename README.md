@@ -1,14 +1,15 @@
 # Azure Role Assignment Exporter (ARA)
 
-[![Version](https://img.shields.io/badge/version-1.0.0-green.svg)](https://github.com/fjdev/ara)
+[![Version](https://img.shields.io/badge/version-2.0.0-green.svg)](https://github.com/fjdev/ara)
 [![Python 3.7+](https://img.shields.io/badge/python-3.7+-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Code Style: Black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
 
-A professional tool for exporting Azure role assignments at management group and subscription scopes with comprehensive reporting and multiple output formats.
+A professional tool for exporting Azure role assignments at management group and subscription scopes with comprehensive reporting, PIM (Privileged Identity Management) integration, and multiple output formats.
 
 ## ✨ Features
 
+- **PIM Integration**: Distinguishes between active permanent, active time-bound, eligible permanent, and eligible time-bound assignments
 - **Multiple Authentication Methods**: Environment variables, Azure CLI, macOS Keychain, interactive prompt
 - **Multi-Level Scanning**: Management groups, subscriptions, resource groups, and individual resources
 - **Flexible Depth Control**: Scan only what you need with configurable depth levels
@@ -17,9 +18,9 @@ A professional tool for exporting Azure role assignments at management group and
 - **Resource Type Filtering**: Focus on specific resource types (VMs, Storage, etc.)
 - **Performance Safeguards**: Rate limiting, max resource limits, and API retry logic
 - **Multiple Output Formats**: JSON, CSV, and Excel (.xlsx) with structured data and formatting
-- **Enhanced Filtering**: Filter by role, principal type, principal name (regex), or exclude system identities
+- **Enhanced Filtering**: Filter by role, principal type, principal name (regex), assignment type, or exclude system identities
 - **Progress Tracking**: Visual progress bar for long-running scans with ETA
-- **Comprehensive Reporting**: Detailed console summaries with statistics
+- **Comprehensive Reporting**: Detailed console summaries with PIM statistics
 - **Robust Error Handling**: Graceful handling of API errors and permissions
 - **Production Ready**: Proper logging, validation, and OOP design
 - **Minimal Dependencies**: Core uses Python standard library (Excel/progress bar use optional dependencies)
@@ -84,9 +85,13 @@ chmod +x ara
   - Read role assignments (`Microsoft.Authorization/roleAssignments/read`)
   - Read management groups (`Microsoft.Management/managementGroups/read`)
   - Read Microsoft Graph API (for principal name resolution)
+  - **Optional (for PIM)**: Read PIM eligible assignments (`Microsoft.Authorization/roleEligibilityScheduleInstances/read`)
+  - **Optional (for PIM)**: Read PIM time-bound assignments (`Microsoft.Authorization/roleAssignmentScheduleInstances/read`)
 - **Network Access** to Azure Management API and Microsoft Graph API
 - **Optional**: `openpyxl` for Excel output (`pip install openpyxl`)
 - **Optional**: `tqdm` for enhanced progress bar (`pip install tqdm`)
+
+**Note**: PIM integration is enabled by default. If PIM permissions are not available, ARA will gracefully fall back to standard RBAC data (active permanent assignments only). Use `--skip-pim` to explicitly disable PIM API calls.
 
 ## 🔐 Authentication
 
@@ -182,8 +187,8 @@ results/
 {
   "metadata": {
     "tool": "Azure Role Assignment Exporter (ARA)",
-    "version": "1.0.0",
-    "scan_timestamp": "2025-11-29T10:30:00.000000",
+    "version": "2.0.0",
+    "scan_timestamp": "2026-01-29T10:30:00.000000",
     "scope": "/providers/Microsoft.Management/managementGroups/my-mg",
     "total_scopes_scanned": 15,
     "total_assignments_found": 42
@@ -197,7 +202,10 @@ results/
       "scope": "/providers/Microsoft.Management/managementGroups/my-mg",
       "scope_name": "my-mg",
       "scope_type": "Management Group",
-      "resource_type": null
+      "resource_type": null,
+      "assignment_type": "Active permanent",
+      "start_date_time": null,
+      "end_date_time": null
     },
     {
       "principal_id": "87654321-4321-4321-4321-123456789abc",
@@ -207,7 +215,10 @@ results/
       "scope": "/subscriptions/.../resourceGroups/rg-prod/providers/Microsoft.Compute/virtualMachines/vm-web-01",
       "scope_name": "vm-web-01",
       "scope_type": "Resource",
-      "resource_type": "Microsoft.Compute/virtualMachines"
+      "resource_type": "Microsoft.Compute/virtualMachines",
+      "assignment_type": "Eligible permanent",
+      "start_date_time": null,
+      "end_date_time": null
     }
   ]
 }
@@ -215,10 +226,10 @@ results/
 
 ### CSV Output Format
 ```csv
-Name,Principal ID,Type,Role,Scope,Scope Type,Resource Type
-John Doe,12345678-1234-1234-1234-123456789abc,User,Owner,my-mg,Management Group,
-App Service Principal,87654321-4321-4321-4321-123456789abc,ServicePrincipal,Contributor,vm-web-01,Resource,Microsoft.Compute/virtualMachines
-Unknown,a1b2c3d4-...,ServicePrincipal,Reader,storage-prod,Resource,Microsoft.Storage/storageAccounts
+Name,Principal ID,Type,Role,Scope,Scope Type,Assignment Type,Resource Type,Start Date,End Date
+John Doe,12345678-1234-1234-1234-123456789abc,User,Owner,my-mg,Management Group,Active permanent,,,
+App Service Principal,87654321-4321-4321-4321-123456789abc,ServicePrincipal,Contributor,vm-web-01,Resource,Eligible permanent,Microsoft.Compute/virtualMachines,,
+Unknown,a1b2c3d4-...,ServicePrincipal,Reader,storage-prod,Resource,Active time-bound,Microsoft.Storage/storageAccounts,2026-01-29T10:00:00Z,2026-01-29T18:00:00Z
 ```
 
 **Note**: "Unknown" appears for deleted/orphaned principals that couldn't be resolved via Graph API.
@@ -238,6 +249,7 @@ Excel output generates a multi-sheet workbook with professional formatting:
 - Assignments grouped by Role
 - Assignments grouped by Principal Type
 - Assignments grouped by Scope Type
+- **Assignments grouped by Type (PIM)** - Active permanent, Active time-bound, Eligible permanent, Eligible time-bound
 
 **Sheet 3: Metadata**
 - Tool name and version
@@ -475,6 +487,78 @@ Filters can be combined for powerful queries:
 - **Compliance reporting**: Filter specific principal types or roles
 - **Investigation**: Search for assignments by naming patterns
 
+### PIM Integration (Privileged Identity Management)
+
+ARA v2.0.0 includes full integration with Azure PIM, distinguishing between four types of role assignments:
+
+1. **Active permanent** - Standard RBAC assignments with no expiration
+2. **Active time-bound** - PIM-activated assignments with an end date
+3. **Eligible permanent** - PIM-eligible assignments that can be activated anytime
+4. **Eligible time-bound** - PIM-eligible assignments with an expiration date
+
+#### How PIM Integration Works
+
+- **Enabled by default**: PIM APIs are called automatically for management groups, subscriptions, and resource groups
+- **Graceful fallback**: If PIM permissions are unavailable, ARA continues with standard RBAC data (active permanent only)
+- **Resource scope limitation**: PIM is not supported for individual resources per Microsoft documentation
+- **Assignment dates**: Start and end dates are included for time-bound assignments
+
+#### PIM Filtering Examples
+
+```bash
+# Find all PIM-eligible assignments (identify who can elevate privileges)
+./ara --scope my-mg --assignment-type-filter "Eligible permanent,Eligible time-bound"
+
+# Find only permanent assignments (active or eligible)
+./ara --scope my-mg --assignment-type-filter "Active permanent,Eligible permanent"
+
+# Security audit: Find all active Owner assignments (permanent + time-bound)
+./ara --scope my-mg --role-filter "Owner" --assignment-type-filter "Active permanent,Active time-bound"
+
+# Compliance check: Find all time-bound assignments (PIM-activated or expiring eligible)
+./ara --scope my-mg --assignment-type-filter "Active time-bound,Eligible time-bound"
+
+# Disable PIM scanning (faster, useful when PIM not available)
+./ara --scope my-mg --skip-pim
+```
+
+#### PIM Output Format
+
+All output formats (JSON, CSV, Excel) include PIM fields:
+
+**JSON:**
+```json
+{
+  "principal_id": "...",
+  "principal_name": "John Doe",
+  "role_name": "Contributor",
+  "assignment_type": "Eligible permanent",
+  "start_date_time": null,
+  "end_date_time": null
+}
+```
+
+**CSV/Excel Columns:**
+- `Assignment Type`: "Active permanent", "Active time-bound", "Eligible permanent", or "Eligible time-bound"
+- `Start Date`: ISO 8601 timestamp (for time-bound assignments)
+- `End Date`: ISO 8601 timestamp (for time-bound assignments)
+
+**Excel Summary Sheet:**
+- "Assignments by Type (PIM)" section shows count breakdown by assignment type
+
+#### PIM Troubleshooting
+
+**PIM data not showing:**
+- Verify your account has the required PIM read permissions (see Requirements section)
+- Check if PIM is enabled for your tenant
+- Use `--debug` to see PIM API call details
+- PIM only works for management groups, subscriptions, and resource groups (not individual resources)
+
+**Permission errors:**
+- ARA will gracefully fall back to standard RBAC if PIM permissions are unavailable
+- All assignments will show as "Active permanent" in fallback mode
+- Consider using `--skip-pim` to explicitly disable PIM calls and improve performance
+
 ### Debug Mode
 
 ```bash
@@ -579,4 +663,4 @@ Part of the VCC (Version Control & Compliance) Toolkit.
 
 ---
 
-**ARA v1.0.0** - Making Azure role assignment auditing simple and professional. 🚀
+**ARA v2.0.0** - Making Azure role assignment auditing with PIM integration simple and professional. 🚀

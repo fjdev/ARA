@@ -29,7 +29,7 @@ class TestUtilityFunctions(unittest.TestCase):
         """Test that version is defined."""
         self.assertTrue(hasattr(ara, '__version__'))
         self.assertIsInstance(ara.__version__, str)
-        self.assertEqual(ara.__version__, '1.0.0')
+        self.assertEqual(ara.__version__, '2.0.0')
     
     def test_author_defined(self):
         """Test that author is defined."""
