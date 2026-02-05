@@ -20,10 +20,17 @@ wheels/
 .installed.cfg
 *.egg
 
+# PyInstaller / Executable builds
+*.spec
+*.exe
+*.dmg
+*.app
+*.deb
+*.rpm
+
 # Results
 results/*.json
 results/*.csv
-results/*.xlsx
 !results/.gitkeep
 
 # Azure credentials (safety measure)
@@ -38,12 +45,6 @@ results/*.xlsx
 # Personal notes
 NOTES.md
 TODO.local.md
-
-# Testing
-.coverage
-htmlcov/
-.tox/
-.pytest_cache/
 
 # IDEs
 .vscode/

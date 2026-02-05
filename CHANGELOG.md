@@ -5,11 +5,45 @@ All notable changes to Azure Role Assignment Exporter (ARA) will be documented i
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.1.0] - 2026-02-05
+
+### Removed
+
+#### Zero Dependencies
+- **Removed TQDM dependency**: Now uses built-in progress tracking only
+- **Removed Excel/openpyxl dependency**: Removed Excel (.xlsx) output format
+- **Removed test suite**: Cleaned up testing infrastructure for simpler deployment
+
+#### Simplified Output Formats
+- **Excel format removed**: Now supports only JSON and CSV output formats
+- Updated `--format` argument to accept only `json` or `csv`
+
+### Changed
+
+#### Documentation Updates
+- **Updated README**: Removed references to Excel output and tqdm
+- **Updated progress tracking documentation**: Reflects built-in progress bar only
+- **Updated requirements**: Now lists zero external dependencies
+- **Updated version badge**: Changed from 2.0.0 to 2.1.0
+
+#### .gitignore Updates
+- **Added executable build artifacts**: Added entries for .spec, .exe, .dmg, .app, .deb, .rpm
+- **Removed testing artifacts**: Removed .coverage, htmlcov/, .tox/, .pytest_cache/
+- **Removed Excel results**: Removed results/*.xlsx pattern
+
+### Technical Details
+- **Version bumped to 2.1.0**
+- **Zero external dependencies**: Tool now runs with Python standard library only
+- **Smaller codebase**: Removed ~300 lines of Excel-related code
+- **Preparation for executables**: Updated for PyInstaller/similar packaging tools
+
+---
+
 ## [2.0.0] - 2026-01-29
 
 ### ⚠️ BREAKING CHANGES
 
-**All output formats (JSON, CSV, Excel) have been updated with new fields. Users parsing output programmatically must update their code.**
+**All output formats (JSON, CSV) have been updated with new fields. Users parsing output programmatically must update their code.**
 
 #### New Fields in All Output Formats:
 - **`assignment_type`** (string): Assignment type with four possible values:
@@ -67,7 +101,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Migration guide** for users upgrading from v1.x
 
 #### Output Enhancements
-- **Excel Summary sheet** now includes "Assignments by Type (PIM)" statistics
 - **Console logging** shows breakdown by assignment type (e.g., "2 active permanent, 1 eligible permanent")
 - **Metadata tracking** for PIM scan status in output files
 
@@ -86,8 +119,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Performance**: PIM adds 2 API calls per scope (eligible + time-bound active)
 - **Scope limitations**: PIM only works for management groups, subscriptions, and resource groups (not individual resources, per Microsoft documentation)
 - **Backward compatibility**: Use `--skip-pim` to maintain v1.x behavior (all assignments marked as "Active permanent")
-- **Testing**: All 88 tests passing (79 unit + 9 performance), no regressions
-- **Security**: CodeQL scan passed with 0 alerts
 
 ---
 
