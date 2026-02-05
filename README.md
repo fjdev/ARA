@@ -178,7 +178,6 @@ results/
 
 ### JSON Output Format
 ```json
-```json
 {
   "metadata": {
     "tool": "Azure Role Assignment Exporter (ARA)",
