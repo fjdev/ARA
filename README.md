@@ -1,6 +1,6 @@
 # Azure Role Assignment Exporter (ARA)
 
-[![Version](https://img.shields.io/badge/version-2.0.0-green.svg)](https://github.com/fjdev/ara)
+[![Version](https://img.shields.io/badge/version-2.1.0-green.svg)](https://github.com/fjdev/ara)
 [![Python 3.7+](https://img.shields.io/badge/python-3.7+-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Code Style: Black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
@@ -17,14 +17,13 @@ A professional tool for exporting Azure role assignments at management group and
 - **Principal Name Resolution**: Automatic lookup via Microsoft Graph API with "Unknown" fallback
 - **Resource Type Filtering**: Focus on specific resource types (VMs, Storage, etc.)
 - **Performance Safeguards**: Rate limiting, max resource limits, and API retry logic
-- **Multiple Output Formats**: JSON, CSV, and Excel (.xlsx) with structured data and formatting
+- **Multiple Output Formats**: JSON and CSV with structured data
 - **Enhanced Filtering**: Filter by role, principal type, principal name (regex), assignment type, or exclude system identities
 - **Progress Tracking**: Visual progress bar for long-running scans with ETA
 - **Comprehensive Reporting**: Detailed console summaries with PIM statistics
 - **Robust Error Handling**: Graceful handling of API errors and permissions
 - **Production Ready**: Proper logging, validation, and OOP design
-- **Minimal Dependencies**: Core uses Python standard library (Excel/progress bar use optional dependencies)
-- **Fully Tested**: Comprehensive test suite with 88 tests (79 unit + 9 performance)
+- **Zero Dependencies**: Built entirely with Python standard library
 
 ## 🚀 Quick Start
 
@@ -51,9 +50,6 @@ chmod +x ara
 
 # Export to CSV format
 ./ara --scope my-mg --format csv
-
-# Export to Excel format (requires: pip install openpyxl)
-./ara --scope my-mg --format xlsx
 
 # Scan including subscriptions (management group scope only)
 ./ara --scope my-mg --depth subscriptions
@@ -88,8 +84,6 @@ chmod +x ara
   - **Optional (for PIM)**: Read PIM eligible assignments (`Microsoft.Authorization/roleEligibilityScheduleInstances/read`)
   - **Optional (for PIM)**: Read PIM time-bound assignments (`Microsoft.Authorization/roleAssignmentScheduleInstances/read`)
 - **Network Access** to Azure Management API and Microsoft Graph API
-- **Optional**: `openpyxl` for Excel output (`pip install openpyxl`)
-- **Optional**: `tqdm` for enhanced progress bar (`pip install tqdm`)
 
 **Note**: PIM integration is enabled by default. If PIM permissions are not available, ARA will gracefully fall back to standard RBAC data (active permanent assignments only). Use `--skip-pim` to explicitly disable PIM API calls.
 
@@ -184,6 +178,7 @@ results/
 
 ### JSON Output Format
 ```json
+```json
 {
   "metadata": {
     "tool": "Azure Role Assignment Exporter (ARA)",
@@ -233,35 +228,6 @@ Unknown,a1b2c3d4-...,ServicePrincipal,Reader,storage-prod,Resource,Active time-b
 ```
 
 **Note**: "Unknown" appears for deleted/orphaned principals that couldn't be resolved via Graph API.
-
-### Excel Output Format
-
-Excel output generates a multi-sheet workbook with professional formatting:
-
-**Sheet 1: Role Assignments**
-- Formatted table with headers, borders, and auto-sized columns
-- Frozen header row for easy scrolling
-- Auto-filters enabled on all columns
-- Same data as CSV with better presentation
-
-**Sheet 2: Summary**
-- Total assignment and scope counts
-- Assignments grouped by Role
-- Assignments grouped by Principal Type
-- Assignments grouped by Scope Type
-- **Assignments grouped by Type (PIM)** - Active permanent, Active time-bound, Eligible permanent, Eligible time-bound
-
-**Sheet 3: Metadata**
-- Tool name and version
-- Scan timestamp
-- Scope scanned
-- Total statistics
-
-**Requirements**: Install openpyxl first:
-```bash
-pip install openpyxl
-./ara --scope my-mg --format xlsx
-```
 
 ### Console Summary
 ```
@@ -373,9 +339,6 @@ Protect against runaway scans:
 
 # CSV output
 ./ara --scope my-mg --format csv
-
-# Excel output (requires openpyxl)
-./ara --scope my-mg --format xlsx
 ```
 
 ### Progress Tracking
@@ -386,7 +349,7 @@ ARA shows a progress bar for long-running scans to track completion and estimate
 - Real-time progress percentage and ETA
 - Scope count (processed/total)
 - Processing rate (scopes per second)
-- Works with simple text display (built-in) or tqdm (enhanced, optional)
+- Simple built-in text display
 
 **Usage:**
 ```bash
@@ -395,16 +358,11 @@ ARA shows a progress bar for long-running scans to track completion and estimate
 
 # Disable progress bar
 ./ara --scope my-mg --no-progress
-
-# Enhanced progress with tqdm (optional)
-pip install tqdm
-./ara --scope my-mg --depth resources
 ```
 
-**Display modes:**
-- **With tqdm** (if installed): `Scanning scopes: 100%|██████████| 156/156 [01:47<00:00, 1.45scope/s]`
-- **Without tqdm** (built-in): `Scanning scopes: [████████████████████] 156/156 (100%) | ETA: 0s | 1.4 scopes/s`
-- **Debug mode**: Progress automatically disabled to show detailed logs
+**Display:**
+- Built-in progress: `Scanning scopes: [████████████████████] 156/156 (100%) | ETA: 0s | 1.4 scopes/s`
+- Debug mode: Progress automatically disabled to show detailed logs
 
 **Note**: Progress is automatically disabled in `--debug` mode or when using `--no-progress`.
 
@@ -478,7 +436,7 @@ Filters can be combined for powerful queries:
 - **Post-processing**: Filters are applied after fetching (all assignments are retrieved, then filtered)
 - **Case-insensitive**: All text matching is case-insensitive
 - **Regex support**: Principal name filter supports full regex patterns
-- **Metadata tracking**: Applied filters are documented in JSON/Excel outputs
+- **Metadata tracking**: Applied filters are documented in JSON/CSV outputs
 - **Count reporting**: Shows both total found and filtered counts in logs
 
 **Use Cases:**
@@ -524,7 +482,7 @@ ARA v2.0.0 includes full integration with Azure PIM, distinguishing between four
 
 #### PIM Output Format
 
-All output formats (JSON, CSV, Excel) include PIM fields:
+All output formats (JSON and CSV) include PIM fields:
 
 **JSON:**
 ```json
@@ -538,13 +496,10 @@ All output formats (JSON, CSV, Excel) include PIM fields:
 }
 ```
 
-**CSV/Excel Columns:**
+**CSV Columns:**
 - `Assignment Type`: "Active permanent", "Active time-bound", "Eligible permanent", or "Eligible time-bound"
 - `Start Date`: ISO 8601 timestamp (for time-bound assignments)
 - `End Date`: ISO 8601 timestamp (for time-bound assignments)
-
-**Excel Summary Sheet:**
-- "Assignments by Type (PIM)" section shows count breakdown by assignment type
 
 #### PIM Troubleshooting
 
